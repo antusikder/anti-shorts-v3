@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  IMPORTANT: This file shows the required entries for AndroidManifest.xml.
+  When using Expo with EAS Build, these entries are merged into the final manifest.
+  The app.json plugins array handles most of this automatically.
+  
+  Key additions beyond the standard Expo manifest:
+  1. BIND_ACCESSIBILITY_SERVICE permission declaration
+  2. AntiShortsService service entry with meta-data pointing to config XML
+  3. FOREGROUND_SERVICE permission for persistent service
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.antishorts.shield">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+
+    <application
+        android:name=".MainApplication"
+        android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false"
+        android:theme="@style/AppTheme">
+
+        <activity
+            android:name=".MainActivity"
+            android:label="@string/app_name"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|uiMode"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+          AntiShortsService Declaration
+          ==============================
+          - permission: BIND_ACCESSIBILITY_SERVICE prevents other apps from binding
+          - meta-data: points to our accessibility_service_config.xml
+          - The config limits monitoring to ONLY YouTube and Facebook
+        -->
+        <service
+            android:name=".AntiShortsService"
+            android:label="Anti Shorts"
+            android:description="@string/accessibility_service_description"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
+
+    </application>
+
+</manifest>
