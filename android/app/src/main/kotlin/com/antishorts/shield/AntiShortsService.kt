@@ -30,7 +30,7 @@ class AntiShortsService : AccessibilityService() {
 
     companion object {
         private const val TAG = "AntiShortsService"
-        private const val PREFS_NAME = "antishorts_prefs"
+        const val PREFS_NAME = "antishorts_prefs"
 
         // Preference keys (synced from React Native UI)
         const val PREF_YT_SHORTS = "yt_remove_shorts"
