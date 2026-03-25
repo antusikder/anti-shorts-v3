@@ -1,4 +1,4 @@
-package com.antishorts
+package com.antishorts.shield
 
 import android.app.Application
 import android.content.res.Configuration
@@ -16,7 +16,7 @@ import com.facebook.react.defaults.DefaultReactNativeHost
 import expo.modules.ApplicationLifecycleDispatcher
 import expo.modules.ReactNativeHostWrapper
 
-import com.antishorts.shield.AntiShortsPackage
+import com.antishorts.shield.shield.AntiShortsPackage
 
 class MainApplication : Application(), ReactApplication {
 
