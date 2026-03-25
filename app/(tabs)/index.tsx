@@ -8,6 +8,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 
 import { ServiceStatusCard } from "@/components/ServiceStatusCard";
 import { StatsRow } from "@/components/StatsRow";
@@ -44,7 +45,7 @@ export default function HomeScreen() {
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
 
   return (
-    <View style={[styles.root, { backgroundColor: C.background }]}>
+    <LinearGradient colors={[C.background, "#1A1A2E"]} style={styles.root}>
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[
@@ -147,7 +148,7 @@ export default function HomeScreen() {
 
         {!settings.isServiceEnabled && <SetupGuide />}
       </ScrollView>
-    </View>
+    </LinearGradient>
   );
 }
 
