@@ -1,32 +1,60 @@
-const primary = "#6C63FF";
-const primaryDark = "#4A44CC";
-const accent = "#FF4757";
-const accentGreen = "#2ED573";
-const accentYellow = "#FFD43B";
+// Productive — design token palette
+// Cozy deep-space + warm amber + soft indigo
+
+const primary    = "#7C6FFF"; // Soft indigo
+const primaryDark= "#5A4ECC";
+const amber      = "#FFB347"; // Warm amber accent
+const green      = "#3DDC84"; // Success green
+const red        = "#FF5C5C"; // Danger
+const blue       = "#4A9EFF"; // Info blue
 
 export default {
   dark: {
-    background: "#0A0A0F",
-    backgroundSecondary: "#12121A",
-    backgroundCard: "#1A1A26",
-    backgroundElevated: "#22223A",
-    border: "#2A2A40",
-    text: "#FFFFFF",
-    textSecondary: "#9B9BC8",
-    textMuted: "#5A5A7A",
-    tint: primary,
-    tintDark: primaryDark,
-    accent: accent,
-    accentGreen: accentGreen,
-    accentYellow: accentYellow,
-    tabIconDefault: "#5A5A7A",
-    tabIconSelected: primary,
-    switchTrack: "#2A2A40",
-    switchThumb: "#FFFFFF",
-    danger: "#FF4757",
-    success: "#2ED573",
-    warning: "#FFD43B",
-    youtube: "#FF0000",
-    facebook: "#1877F2",
+    // Backgrounds
+    background:          "#0D0B1E",  // Deep space navy
+    backgroundSecondary: "#141228",
+    backgroundCard:      "#1C1A32",
+    backgroundElevated:  "#242140",
+    backgroundGlass:     "rgba(28,26,50,0.85)",
+
+    // Borders
+    border:              "#2E2A50",
+    borderLight:         "#3A356A",
+
+    // Text
+    text:                "#F0EEFF",
+    textSecondary:       "#9B98D0",
+    textMuted:           "#5C5888",
+
+    // Accents
+    tint:                primary,
+    tintDark:            primaryDark,
+    amber:               amber,
+    amberSoft:           amber + "33",
+    green:               green,
+    success:             green,
+    danger:              red,
+    warning:             amber,
+    info:                blue,
+
+    // Platform
+    youtube:             "#FF3B30",
+    facebook:            "#4A9EFF",
+
+    // UI
+    tabIconDefault:      "#5C5888",
+    tabIconSelected:     primary,
+    switchTrack:         "#2E2A50",
+    switchThumb:         "#F0EEFF",
+
+    // Gradient stops (for LinearGradient)
+    gradStart:           "#0D0B1E",
+    gradMid:             "#141228",
+    gradEnd:             "#0D0B1E",
+
+    // Planner
+    plannerAccent:       "#A78BFA",  // Soft violet
+    breakColor:          "#34D399",  // Mint
+    strictColor:         "#F87171",  // Warm red
   },
 };

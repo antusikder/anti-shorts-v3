@@ -5,7 +5,7 @@ import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
 import { SymbolView } from "expo-symbols";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import React from "react";
-import { Platform, StyleSheet, View, useColorScheme } from "react-native";
+import { Platform, StyleSheet, View } from "react-native";
 
 import Colors from "@/constants/colors";
 
@@ -16,16 +16,27 @@ function NativeTabLayout() {
         <Icon sf={{ default: "shield", selected: "shield.fill" }} />
         <Label>Shield</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="setup">
-        <Icon sf={{ default: "info.circle", selected: "info.circle.fill" }} />
-        <Label>Setup</Label>
+      <NativeTabs.Trigger name="planner">
+        <Icon sf={{ default: "calendar", selected: "calendar.badge.clock" }} />
+        <Label>Planner</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="schedule">
+        <Icon sf={{ default: "clock", selected: "clock.fill" }} />
+        <Label>Schedule</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="bedtime">
+        <Icon sf={{ default: "moon", selected: "moon.fill" }} />
+        <Label>Bedtime</Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="settings">
+        <Icon sf={{ default: "gear", selected: "gearshape.fill" }} />
+        <Label>Settings</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
 }
 
 function ClassicTabLayout() {
-  const isDark = true;
   const isIOS = Platform.OS === "ios";
   const isWeb = Platform.OS === "web";
   const C = Colors.dark;
@@ -34,11 +45,11 @@ function ClassicTabLayout() {
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: C.tint,
-        tabBarInactiveTintColor: C.textMuted,
+        tabBarInactiveTintColor: C.tabIconDefault,
         headerShown: false,
         tabBarStyle: {
           position: "absolute",
-          backgroundColor: isIOS ? "transparent" : C.backgroundSecondary,
+          backgroundColor: isIOS ? "transparent" : C.backgroundGlass,
           borderTopWidth: StyleSheet.hairlineWidth,
           borderTopColor: C.border,
           elevation: 0,
@@ -46,18 +57,9 @@ function ClassicTabLayout() {
         },
         tabBarBackground: () =>
           isIOS ? (
-            <BlurView
-              intensity={80}
-              tint="dark"
-              style={StyleSheet.absoluteFill}
-            />
+            <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
           ) : isWeb ? (
-            <View
-              style={[
-                StyleSheet.absoluteFill,
-                { backgroundColor: C.backgroundSecondary },
-              ]}
-            />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: C.backgroundSecondary }]} />
           ) : null,
       }}
     >
@@ -66,39 +68,44 @@ function ClassicTabLayout() {
         options={{
           title: "Shield",
           tabBarIcon: ({ color, focused }) =>
-            isIOS ? (
-              <SymbolView
-                name={focused ? "shield.fill" : "shield"}
-                tintColor={color}
-                size={24}
-              />
-            ) : (
-              <MaterialCommunityIcons
-                name={focused ? "shield-check" : "shield-check-outline"}
-                size={24}
-                color={color}
-              />
-            ),
+            isIOS ? <SymbolView name={focused ? "shield.fill" : "shield"} tintColor={color} size={24} />
+                  : <MaterialCommunityIcons name={focused ? "shield-check" : "shield-check-outline"} size={26} color={color} />,
         }}
       />
       <Tabs.Screen
-        name="setup"
+        name="planner"
         options={{
-          title: "Setup",
+          title: "Planner",
           tabBarIcon: ({ color, focused }) =>
-            isIOS ? (
-              <SymbolView
-                name={focused ? "info.circle.fill" : "info.circle"}
-                tintColor={color}
-                size={24}
-              />
-            ) : (
-              <Feather
-                name="info"
-                size={22}
-                color={color}
-              />
-            ),
+            isIOS ? <SymbolView name={focused ? "checklist" : "checklist.unchecked"} tintColor={color} size={24} />
+                  : <Feather name="check-square" size={24} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="schedule"
+        options={{
+          title: "Schedule",
+          tabBarIcon: ({ color, focused }) =>
+            isIOS ? <SymbolView name={focused ? "clock.fill" : "clock"} tintColor={color} size={24} />
+                  : <Feather name="clock" size={24} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="bedtime"
+        options={{
+          title: "Bedtime",
+          tabBarIcon: ({ color, focused }) =>
+            isIOS ? <SymbolView name={focused ? "moon.fill" : "moon"} tintColor={color} size={24} />
+                  : <MaterialCommunityIcons name={focused ? "weather-night" : "moon-waning-crescent"} size={26} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: "Settings",
+          tabBarIcon: ({ color, focused }) =>
+            isIOS ? <SymbolView name={focused ? "gearshape.fill" : "gearshape"} tintColor={color} size={24} />
+                  : <Feather name="settings" size={24} color={color} />,
         }}
       />
     </Tabs>

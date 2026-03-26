@@ -1,17 +1,17 @@
 {
   "expo": {
-    "name": "Anti Shorts",
-    "slug": "anti-shorts",
-    "version": "1.0.0",
+    "name": "Productive",
+    "slug": "productive",
+    "version": "2.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "anti-shorts",
+    "scheme": "productive",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0A0A0F"
+      "backgroundColor": "#0D0B1E"
     },
     "ios": {
       "supportsTablet": false,
@@ -20,13 +20,16 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
-        "backgroundColor": "#0A0A0F"
+        "backgroundColor": "#0D0B1E"
       },
       "package": "com.antishorts.shield",
       "permissions": [
         "android.permission.BIND_ACCESSIBILITY_SERVICE",
         "android.permission.SYSTEM_ALERT_WINDOW",
-        "android.permission.FOREGROUND_SERVICE"
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE"
       ]
     },
     "web": {
