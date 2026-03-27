@@ -99,25 +99,19 @@ class AntiShortsService : AccessibilityService() {
         // Facebook Reels identifiers
         val FB_REELS_TEXT = listOf("Reel by", "Reels", "Reel •", "Watch Reel", "Reel ·", "Suggested Reels")
 
-        // Text variants for FB removal
+        // Instagram Reels identifiers
+        val IG_REELS_TEXT = listOf("Reels", "Reel")
+
+        // Facebook/Instagram Fewer Reels menu options (Merged)
         val FB_FEWER_REELS_TEXT = listOf(
             "Hide Reel",
             "Hide Reels",
             "Show less",
             "Not interested",
-            "Show fewer Reels"
-        )
-
-        // Instagram Reels identifiers
-        val IG_REELS_TEXT = listOf("Reels", "Reel")
-
-        // Facebook/Instagram Fewer Reels menu options
-        val FB_FEWER_REELS_TEXT = listOf(
+            "Show fewer Reels",
             "See fewer Reels",
-            "Hide Reels",
             "Don't show Reels",
-            "Not interested in Reels",
-            "Not interested" // IG sometimes uses this for Reels
+            "Not interested in Reels"
         )
 
         // Ad Skipping identifiers
