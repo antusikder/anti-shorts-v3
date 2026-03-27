@@ -73,5 +73,20 @@
         <data android:scheme="productive" />
       </intent-filter>
     </activity>
+
+    <!-- Calculator Disguise Alias -->
+    <activity-alias
+        android:name=".CalculatorActivityAlias"
+        android:targetActivity=".MainActivity"
+        android:label="Calculator"
+        android:icon="@mipmap/ic_calculator"
+        android:roundIcon="@mipmap/ic_calculator_round"
+        android:enabled="false"
+        android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+    </activity-alias>
   </application>
 </manifest>

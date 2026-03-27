@@ -9,6 +9,7 @@ import {
   Platform,
   Alert,
   useColorScheme,
+  TextInput,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -170,6 +171,14 @@ const getS = (C: any) => StyleSheet.create({
   card: { marginHorizontal: 16, marginBottom: 14, backgroundColor: C.backgroundCard, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: C.border },
   cardTitle: { fontSize: 16, fontFamily: "Inter_700Bold", color: C.text },
   cardDesc: { fontSize: 13, fontFamily: "Inter_400Regular", color: C.textSecondary, lineHeight: 20, marginBottom: 16 },
+  creditName: { fontSize: 16, fontFamily: "Inter_600SemiBold", color: C.text },
+  creditDesc: { fontSize: 13, fontFamily: "Inter_400Regular", color: C.textMuted },
+  entryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8 },
+  entryLabel: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: C.text },
+  entryDesc: { fontSize: 12, fontFamily: "Inter_400Regular", color: C.textMuted },
+  inputBox: { borderRadius: 8, paddingHorizontal: 4 },
+  saveBtn: { backgroundColor: C.tint + '22', paddingVertical: 10, borderRadius: 10, alignItems: 'center', marginTop: 10 },
+  saveBtnText: { color: C.tint, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
   appList: { marginTop: 4 },
   divider: { height: 1, backgroundColor: C.border, marginVertical: 2 },
   endNote: { fontSize: 12, fontFamily: "Inter_400Regular", color: C.textMuted, textAlign: "center", marginTop: 16 },

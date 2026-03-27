@@ -21,7 +21,29 @@ SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
 
+import { useSettings } from "@/context/SettingsContext";
+import Colors from "@/constants/colors";
+import { useColorScheme } from "react-native";
+import CalculatorDecoy from "@/components/CalculatorDecoy";
+
 function RootLayoutNav() {
+  const { settings, isLoaded } = useSettings();
+  const colorScheme = useColorScheme();
+  const C = Colors[colorScheme === "dark" ? "dark" : "light"];
+  const [isUnlocked, setIsUnlocked] = React.useState(false);
+
+  if (!isLoaded) return null;
+
+  const showLock = settings.privacy.pin && !isUnlocked;
+  
+  if (showLock) {
+    return <CalculatorDecoy 
+      correctPin={settings.privacy.pin} 
+      C={C} 
+      onUnlock={() => setIsUnlocked(true)} 
+    />;
+  }
+
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />

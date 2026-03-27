@@ -14,7 +14,10 @@ import com.facebook.react.uimanager.ViewManager
 class AntiShortsPackage : ReactPackage {
 
     override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> {
-        return listOf(AntiShortsModule(reactContext))
+        return listOf(
+            AntiShortsModule(reactContext),
+            LauncherModule(reactContext)
+        )
     }
 
     override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<*, *>> {

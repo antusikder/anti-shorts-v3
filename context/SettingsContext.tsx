@@ -42,6 +42,11 @@ export interface Settings {
   bedtime: BedtimeSettings;
   blockList: string[]; // package names to block
   blockActive: boolean; // strict/schedule session active
+  privacy: {
+    pin: string | null;
+    isDisguised: boolean;
+    recoveryEmail: string;
+  };
   stats: {
     shortsShieldedToday: number;
     reelsRejectedToday: number;
@@ -91,6 +96,11 @@ const defaultSettings: Settings = {
     "com.android.chrome",
   ],
   blockActive: false,
+  privacy: {
+    pin: null,
+    isDisguised: false,
+    recoveryEmail: "",
+  },
   stats: {
     shortsShieldedToday: 0,
     reelsRejectedToday: 0,
@@ -117,6 +127,7 @@ interface SettingsContextType {
   updateBlockList: (list: string[]) => void;
   setBlockActive: (active: boolean) => void;
   setServiceEnabled: (enabled: boolean) => void;
+  updatePrivacy: (key: keyof Settings["privacy"], value: any) => void;
   incrementStat: (stat: "shorts" | "reels" | "ads") => void;
   isLoaded: boolean;
 }
@@ -160,6 +171,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         if (parsed.skipAds === undefined) parsed.skipAds = true;
         if (!parsed.blockList) parsed.blockList = defaultSettings.blockList;
         if (parsed.blockActive === undefined) parsed.blockActive = false;
+        parsed.privacy = { ...defaultSettings.privacy, ...parsed.privacy };
         setSettings(parsed);
       }
     } catch {
@@ -265,6 +277,12 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     [update]
   );
 
+  const updatePrivacy = useCallback(
+    (key: keyof Settings["privacy"], value: any) =>
+      update((p) => ({ ...p, privacy: { ...p.privacy, [key]: value } })),
+    [update]
+  );
+
   const incrementStat = useCallback(
     (stat: "shorts" | "reels" | "ads") =>
       update((p) => {
@@ -299,6 +317,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         updateBlockList,
         setBlockActive,
         setServiceEnabled,
+        updatePrivacy,
         incrementStat,
         isLoaded,
       }}
