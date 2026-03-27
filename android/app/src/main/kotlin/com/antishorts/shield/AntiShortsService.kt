@@ -281,6 +281,7 @@ class AntiShortsService : AccessibilityService() {
                     try { node.recycle() } catch (_: Exception) {}
                 }
             }
+        }
     }
 
     private fun isShortsPlayerVisible(root: AccessibilityNodeInfo): Boolean {
