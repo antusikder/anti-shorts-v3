@@ -86,14 +86,27 @@ class AntiShortsService : AccessibilityService() {
         val YT_SHORTS_SHELF_TEXT = listOf("Shorts", "YouTube Shorts")
 
         // Text that appears ONLY in the Shorts shelf three-dot menu (single item)
+        // Added more variants for global coverage
         val YT_FEWER_SHORTS_TEXT = listOf(
-            "Don't recommend Shorts from this channel",
+            "Don't recommend Shorts",
             "Fewer Shorts",
-            "Show fewer Shorts"
+            "Show fewer Shorts",
+            "Not interested",
+            "Stop recommending",
+            "Hide Shorts Shelf"
         )
 
         // Facebook Reels identifiers
-        val FB_REELS_TEXT = listOf("Reel by", "Reels", "Reel •", "Watch Reel", "Reel ·")
+        val FB_REELS_TEXT = listOf("Reel by", "Reels", "Reel •", "Watch Reel", "Reel ·", "Suggested Reels")
+
+        // Text variants for FB removal
+        val FB_FEWER_REELS_TEXT = listOf(
+            "Hide Reel",
+            "Hide Reels",
+            "Show less",
+            "Not interested",
+            "Show fewer Reels"
+        )
 
         // Instagram Reels identifiers
         val IG_REELS_TEXT = listOf("Reels", "Reel")
@@ -285,12 +298,22 @@ class AntiShortsService : AccessibilityService() {
     }
 
     private fun isShortsPlayerVisible(root: AccessibilityNodeInfo): Boolean {
+        val screenRect = android.graphics.Rect()
+        root.getBoundsInScreen(screenRect)
+        val screenHeight = screenRect.height()
+        if (screenHeight <= 0) return false
+
         for (id in YT_SHORTS_PLAYER_IDS) {
             val nodes = root.findAccessibilityNodeInfosByViewId(id)
             if (nodes.isNotEmpty()) {
-                val visible = nodes.any { it.isVisibleToUser }
+                val isFullPlayer = nodes.any { 
+                    val rect = android.graphics.Rect()
+                    it.getBoundsInScreen(rect)
+                    // High-accuracy check: container must occupy >70% of screen height
+                    it.isVisibleToUser && rect.height() > (screenHeight * 0.7)
+                }
                 nodes.forEach { try { it.recycle() } catch (_: Exception) {} }
-                if (visible) return true
+                if (isFullPlayer) return true
             }
         }
         return false
@@ -409,33 +432,57 @@ class AntiShortsService : AccessibilityService() {
         menuNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
         try { menuNode.recycle() } catch (_: Exception) {}
 
+        // Poll for the menu to appear (up to 3 retries)
+        attemptMenuDismiss(dismissTexts, logLabel, 0)
+    }
+
+    private fun attemptMenuDismiss(dismissTexts: List<String>, logLabel: String, attempt: Int) {
         handler.postDelayed({
             try {
                 val currentRoot = rootInActiveWindow ?: return@postDelayed
 
-                // Count menu items visible in the bottom sheet / popup
+                // Check if any menu items are visible yet
                 val menuItemCount = countMenuItems(currentRoot)
-                Log.d(TAG, "$logLabel menu opened — item count: $menuItemCount")
+                
+                if (menuItemCount == 0 && attempt < 3) {
+                    // Menu might still be animating — retry
+                    try { currentRoot.recycle() } catch (_: Exception) {}
+                    attemptMenuDismiss(dismissTexts, logLabel, attempt + 1)
+                    return@postDelayed
+                }
+
+                Log.d(TAG, "$logLabel menu opened (attempt $attempt) — item count: $menuItemCount")
 
                 if (menuItemCount > SHORT_MENU_MAX_ITEMS) {
-                    // This is a general video card menu — close it immediately
-                    Log.d(TAG, "General video menu detected ($menuItemCount items) — pressing BACK")
+                    // This is a general video card menu — close it
+                    Log.d(TAG, "General video menu ($menuItemCount items) — fire BACK")
                     performGlobalAction(GLOBAL_ACTION_BACK)
                     try { currentRoot.recycle() } catch (_: Exception) {}
                     return@postDelayed
                 }
 
-                // This is a Short/Reel menu — find and click the dismiss option
+                if (menuItemCount == 0) {
+                    // Still no items — assume menu failed or closed
+                    try { currentRoot.recycle() } catch (_: Exception) {}
+                    return@postDelayed
+                }
+
+                // This is a Short/Reel menu — search for dismiss text
                 var clicked = false
                 for (text in dismissTexts) {
                     val dismissNodes = currentRoot.findAccessibilityNodeInfosByText(text)
                     if (dismissNodes.isNotEmpty()) {
-                        val target = dismissNodes.firstOrNull { it.isClickable }
-                            ?: findClickableParent(dismissNodes.first())
-                        if (target != null) {
-                            target.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                        // Look for exact match first
+                        val target = dismissNodes.firstOrNull { 
+                            it.text?.toString()?.lowercase() == text.lowercase() ||
+                            it.contentDescription?.toString()?.lowercase() == text.lowercase()
+                        } ?: dismissNodes.first()
+                        
+                        val clickable = if (target.isClickable) target else findClickableParent(target)
+                        if (clickable != null) {
+                            clickable.performAction(AccessibilityNodeInfo.ACTION_CLICK)
                             clicked = true
-                            Log.d(TAG, "$logLabel dismissed successfully")
+                            Log.d(TAG, "$logLabel dismissed via: $text")
                         }
                         dismissNodes.forEach { try { it.recycle() } catch (_: Exception) {} }
                         if (clicked) break
@@ -443,7 +490,6 @@ class AntiShortsService : AccessibilityService() {
                 }
 
                 if (!clicked) {
-                    // Can't find dismiss text — close menu gracefully
                     Log.d(TAG, "$logLabel dismiss text not found — closing menu")
                     performGlobalAction(GLOBAL_ACTION_BACK)
                 }
@@ -452,7 +498,7 @@ class AntiShortsService : AccessibilityService() {
             } catch (e: Exception) {
                 Log.e(TAG, "Menu dismiss error: ${e.message}")
             }
-        }, MENU_READ_DELAY_MS)
+        }, if (attempt == 0) MENU_READ_DELAY_MS else RETRY_DELAY_MS)
     }
 
     /**

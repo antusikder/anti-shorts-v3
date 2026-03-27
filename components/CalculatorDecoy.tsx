@@ -156,9 +156,17 @@ export default function CalculatorDecoy({ onUnlock, correctPin, C }: {
           <CalcButton label="+" type="op" onPress={() => handleOp("+")} />
         </View>
         <View style={styles.row}>
-          <CalcButton label="0" onPress={() => handleDigit("0")} />
+          <View style={{ flexDirection: 'row', gap: 12, flex: 2 }}>
+            <TouchableOpacity 
+              style={[styles.btn, { backgroundColor: C.backgroundElevated, flex: 1, borderRadius: btnSize / 2 }]} 
+              onPress={() => handleDigit("0")}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.btnText, { color: C.text, textAlign: 'left', paddingLeft: 30, width: '100%' }]}>0</Text>
+            </TouchableOpacity>
+          </View>
           <CalcButton label="." onPress={() => handleDigit(".")} />
-          <CalcButton label={correctPin ? "=" : "="} type="equal" onPress={handleEqual} />
+          <CalcButton label="=" type="equal" onPress={handleEqual} />
         </View>
       </View>
     </View>
