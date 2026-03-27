@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -51,15 +51,54 @@ function AppToggleRow({
   );
 }
 
+function ToggleItem({
+  C,
+  label,
+  description,
+  value,
+  onValueChange,
+  icon,
+  disabled = false,
+}: {
+  C: any;
+  label: string;
+  description: string;
+  value: boolean;
+  onValueChange: (v: boolean) => void;
+  icon: React.ReactNode;
+  disabled?: boolean;
+}) {
+  const ar = getAr(C);
+  return (
+    <View style={[ar.row, { opacity: disabled ? 0.5 : 1 }]}>
+      <View style={ar.iconBg}>{icon}</View>
+      <View style={{ flex: 1 }}>
+        <Text style={ar.name}>{label}</Text>
+        <Text style={{ fontSize: 12, color: C.textMuted, fontFamily: "Inter_400Regular" }}>{description}</Text>
+      </View>
+      <Switch
+        value={value}
+        onValueChange={onValueChange}
+        disabled={disabled}
+        trackColor={{ false: C.switchTrack, true: C.tint + "88" }}
+        thumbColor={value ? C.tint : C.textMuted}
+      />
+    </View>
+  );
+}
+
 export default function SettingsScreen() {
   const colorScheme = useColorScheme();
   const C = Colors[colorScheme === "dark" ? "dark" : "light"];
   const s = getS(C);
   
   const insets = useSafeAreaInsets();
-  const { settings, updateBlockList } = useSettings();
+  const { settings, updateBlockList, updatePrivacy, setServiceEnabled } = useSettings();
   const [apps, setApps] = useState<InstalledApp[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const [pinInput, setPinInput] = useState(settings.privacy.pin || "");
+  const [emailInput, setEmailInput] = useState(settings.privacy.recoveryEmail || "");
 
   useEffect(() => {
     loadApps();
@@ -67,15 +106,18 @@ export default function SettingsScreen() {
 
   const loadApps = async () => {
     setLoading(true);
-    const list = await AccessibilityModule.getInstalledApps();
-    // Sort so already blocked apps are at top
-    list.sort((a, b) => {
-      const aB = settings.blockList.includes(a.pkg);
-      const bB = settings.blockList.includes(b.pkg);
-      if (aB === bB) return a.name.localeCompare(b.name);
-      return aB ? -1 : 1;
-    });
-    setApps(list);
+    try {
+      const list = await AccessibilityModule.getInstalledApps();
+      list.sort((a, b) => {
+        const aB = settings.blockList.includes(a.pkg);
+        const bB = settings.blockList.includes(b.pkg);
+        if (aB === bB) return a.name.localeCompare(b.name);
+        return aB ? -1 : 1;
+      });
+      setApps(list);
+    } catch (e) {
+      console.error(e);
+    }
     setLoading(false);
   };
 
@@ -86,6 +128,17 @@ export default function SettingsScreen() {
     updateBlockList(current);
   };
 
+  const savePrivacy = () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    if (pinInput.length > 0 && pinInput.length < 4) {
+      Alert.alert("Invalid PIN", "PIN must be exactly 4 digits or empty to disable.");
+      return;
+    }
+    updatePrivacy("pin", pinInput === "" ? null : pinInput);
+    updatePrivacy("recoveryEmail", emailInput);
+    Alert.alert("Saved", "Privacy settings updated.");
+  };
+
   return (
     <LinearGradient colors={[C.background, "#0A0A14", C.background]} style={{ flex: 1 }}>
       <ScrollView
@@ -93,8 +146,100 @@ export default function SettingsScreen() {
         contentContainerStyle={{ paddingTop: (Platform.OS === "web" ? 60 : insets.top) + 16, paddingBottom: insets.bottom + 110 }}
       >
         <View style={s.header}>
-          <Text style={s.title}>Settings</Text>
-          <Text style={s.subtitle}>Customise your Mind experience</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+             <MaterialCommunityIcons name="leaf" size={28} color={C.tint} />
+             <Text style={s.title}>Settings</Text>
+          </View>
+          <Text style={s.subtitle}>Customise your Fresh Mind experience</Text>
+        </View>
+
+        {/* Master Active Toggle */}
+        <View style={s.card}>
+           <ToggleItem
+            C={C}
+            label="Master Shield"
+            description="Enable or disable all protection features system-wide."
+            value={settings.isServiceEnabled}
+            onValueChange={setServiceEnabled}
+            icon={<Feather name="shield" size={18} color={C.tint} />}
+          />
+        </View>
+
+        {/* PIN & Privacy Section */}
+        <View style={s.card}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 }}>
+            <Feather name="lock" size={18} color={C.tint} />
+            <Text style={s.cardTitle}>Privacy & Parental Control</Text>
+          </View>
+          
+          <View style={s.entryRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.entryLabel}>4-Digit PIN</Text>
+              <Text style={s.entryDesc}>Secure access to the app</Text>
+            </View>
+            <TextInput 
+              style={[s.inputBox, { backgroundColor: C.backgroundElevated, color: C.text, width: 80, textAlign: 'center' }]}
+              value={pinInput}
+              onChangeText={setPinInput}
+              keyboardType="numeric"
+              maxLength={4}
+              placeholder="None"
+              placeholderTextColor={C.textMuted}
+            />
+          </View>
+
+          <View style={s.divider} />
+
+          <View style={s.entryRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.entryLabel}>Recovery Email</Text>
+              <Text style={s.entryDesc}>To reset PIN if forgotten</Text>
+            </View>
+            <TextInput 
+              style={[s.inputBox, { backgroundColor: C.backgroundElevated, color: C.text, width: 160, paddingHorizontal: 10 }]}
+              value={emailInput}
+              onChangeText={setEmailInput}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              placeholder="email@example.com"
+              placeholderTextColor={C.textMuted}
+            />
+          </View>
+
+          <TouchableOpacity style={s.saveBtn} onPress={savePrivacy}>
+            <Text style={s.saveBtnText}>Update PIN & Recovery Info</Text>
+          </TouchableOpacity>
+
+          <View style={{ height: 20 }} />
+          <View style={s.divider} />
+
+          <ToggleItem
+            C={C}
+            label="Calculator Disguise"
+            description="Decoy icon & UI. Requires manual restart."
+            value={settings.privacy.isDisguised}
+            onValueChange={(v: boolean) => {
+               Alert.alert(
+                 "Icon Toggle",
+                 "Switching the icon will momentarily close the app to refresh the system launcher. Continue?",
+                 [
+                   { text: "Cancel", style: "cancel" },
+                   { 
+                     text: "Switch Now", 
+                     onPress: () => {
+                       updatePrivacy("isDisguised", v);
+                       if (Platform.OS === 'android') {
+                         const { NativeModules } = require('react-native');
+                         NativeModules.LauncherModule.setIcon(v ? 'calculator' : 'default');
+                       }
+                     }
+                   }
+                 ]
+               );
+            }}
+            icon={<MaterialCommunityIcons name="calculator" size={20} color={C.tint} />}
+            disabled={!settings.privacy.pin}
+          />
         </View>
 
         <View style={s.card}>
@@ -103,7 +248,7 @@ export default function SettingsScreen() {
             <Text style={s.cardTitle}>App Block List</Text>
           </View>
           <Text style={s.cardDesc}>
-            Select the apps you want to block during Strict Mode sessions and Bedtime. Checked apps will instantly close.
+            Select the apps you want to block during sessions. Checked apps will instantly close.
           </Text>
 
           {loading ? (
@@ -131,7 +276,7 @@ export default function SettingsScreen() {
             <Feather name="info" size={18} color={C.textSecondary} />
             <Text style={s.cardTitle}>About Fresh Mind</Text>
           </View>
-          <Text style={s.aboutText}>Version 3.0.0</Text>
+          <Text style={s.aboutText}>Version 3.1.2</Text>
           <Text style={s.aboutText}>Accessibility Service: {settings.isServiceEnabled ? "Active" : "Inactive"}</Text>
           
           <View style={s.creditsBox}>
@@ -140,17 +285,6 @@ export default function SettingsScreen() {
              <Text style={s.creditSub}>Alman studies Meteorology at University of Dhaka</Text>
              <Text style={{...s.creditSub, marginTop: 12}}>Copyright © {new Date().getFullYear()}</Text>
           </View>
-
-          <TouchableOpacity
-            style={s.resetBtn}
-            onPress={() => Alert.alert("Reset Stats", "Clear all time stats today?", [
-              { text: "Cancel" },
-              { text: "Reset", style: "destructive", onPress: () => console.log("implement reset") }
-            ])}
-            activeOpacity={0.8}
-          >
-            <Text style={s.resetBtnText}>Reset Today's Stats</Text>
-          </TouchableOpacity>
         </View>
       </ScrollView>
     </LinearGradient>
@@ -171,22 +305,18 @@ const getS = (C: any) => StyleSheet.create({
   card: { marginHorizontal: 16, marginBottom: 14, backgroundColor: C.backgroundCard, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: C.border },
   cardTitle: { fontSize: 16, fontFamily: "Inter_700Bold", color: C.text },
   cardDesc: { fontSize: 13, fontFamily: "Inter_400Regular", color: C.textSecondary, lineHeight: 20, marginBottom: 16 },
-  creditName: { fontSize: 16, fontFamily: "Inter_600SemiBold", color: C.text },
-  creditDesc: { fontSize: 13, fontFamily: "Inter_400Regular", color: C.textMuted },
   entryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8 },
-  entryLabel: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: C.text },
-  entryDesc: { fontSize: 12, fontFamily: "Inter_400Regular", color: C.textMuted },
-  inputBox: { borderRadius: 8, paddingHorizontal: 4 },
-  saveBtn: { backgroundColor: C.tint + '22', paddingVertical: 10, borderRadius: 10, alignItems: 'center', marginTop: 10 },
-  saveBtnText: { color: C.tint, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
+  entryLabel: { fontSize: 15, fontFamily: "Inter_600SemiBold", color: C.text },
+  entryDesc: { fontSize: 13, fontFamily: "Inter_400Regular", color: C.textMuted },
+  inputBox: { borderRadius: 12, height: 44, justifyContent: 'center' },
+  saveBtn: { backgroundColor: C.tint + '15', paddingVertical: 12, borderRadius: 12, alignItems: 'center', marginTop: 16 },
+  saveBtnText: { color: C.tint, fontFamily: 'Inter_600SemiBold', fontSize: 14 },
   appList: { marginTop: 4 },
-  divider: { height: 1, backgroundColor: C.border, marginVertical: 2 },
+  divider: { height: 1, backgroundColor: C.border, marginVertical: 4 },
   endNote: { fontSize: 12, fontFamily: "Inter_400Regular", color: C.textMuted, textAlign: "center", marginTop: 16 },
   aboutText: { fontSize: 14, fontFamily: "Inter_400Regular", color: C.textSecondary, marginBottom: 6 },
   creditsBox: { marginTop: 16, padding: 16, backgroundColor: C.backgroundSecondary, borderRadius: 12 },
-  creditHeader: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: C.textMuted, textTransform: "uppercase", letterSpacing: 0.5 },
-  creditText: { fontSize: 16, fontFamily: "Inter_700Bold", color: C.text, marginTop: 2 },
-  creditSub: { fontSize: 12, fontFamily: "Inter_400Regular", color: C.textSecondary, marginTop: 4, fontStyle: "italic" },
-  resetBtn: { marginTop: 16, alignSelf: "flex-start", paddingVertical: 8, paddingHorizontal: 14, borderRadius: 12, backgroundColor: C.danger + "22" },
-  resetBtnText: { color: C.danger, fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  creditHeader: { fontSize: 11, fontFamily: "Inter_600SemiBold", color: C.textMuted, textTransform: "uppercase", letterSpacing: 1 },
+  creditText: { fontSize: 18, fontFamily: "Inter_700Bold", color: C.text, marginTop: 2 },
+  creditSub: { fontSize: 12, fontFamily: "Inter_400Regular", color: C.textSecondary, marginTop: 4 },
 });

@@ -57,8 +57,14 @@ export default function CalculatorDecoy({ onUnlock, correctPin, C }: {
     }
     
     setLastOp(op);
-    setHistory(`${display} ${op}`);
+    setHistory(`${display.substring(0, 10)} ${op}`);
     setWaitingForOperand(true);
+  };
+
+  const formatDisplay = (num: number) => {
+    const s = String(num);
+    if (s.length > 12) return num.toPrecision(8);
+    return s;
   };
 
   const performCalc = (a: number, b: number, op: string) => {
@@ -84,7 +90,7 @@ export default function CalculatorDecoy({ onUnlock, correctPin, C }: {
     if (prevVal !== null && lastOp) {
       const result = performCalc(prevVal, val, lastOp);
       setHistory("");
-      setDisplay(String(result));
+      setDisplay(formatDisplay(result));
       setPrevVal(null);
       setLastOp(null);
       setWaitingForOperand(true);
