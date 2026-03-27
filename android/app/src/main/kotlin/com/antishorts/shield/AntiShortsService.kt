@@ -149,78 +149,82 @@ class AntiShortsService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        event ?: return
-        val pkg = event.packageName?.toString() ?: return
+        try {
+            event ?: return
+            val pkg = event.packageName?.toString() ?: return
 
-        // Throttle — read prefs fresh for interval
-        val now = System.currentTimeMillis()
-        val interval = prefs.getLong(PREF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
-        if (now - lastCheckTime < interval) return
-        lastCheckTime = now
+            // Throttle — read prefs fresh for interval
+            val now = System.currentTimeMillis()
+            val interval = prefs.getLong(PREF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+            if (now - lastCheckTime < interval) return
+            lastCheckTime = now
 
-        // Only care about window state / content changes
-        val eventType = event.eventType
-        if (eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
-            eventType != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) return
+            // Only care about window state / content changes
+            val eventType = event.eventType
+            if (eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
+                eventType != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) return
 
-        currentPkg = pkg
+            currentPkg = pkg
 
-        // ── Master Switch ───────────────────────────────────────────────────
-        if (!prefs.getBoolean(PREF_SYSTEM_ENABLED, true)) return
+            // ── Master Switch ───────────────────────────────────────────────────
+            if (!prefs.getBoolean(PREF_SYSTEM_ENABLED, true)) return
 
-        // ── Block mode ──────────────────────────────────────────────────────
-        val blockActive = prefs.getBoolean(PREF_BLOCK_ACTIVE, false)
-        if (blockActive) {
-            val blockedApps = prefs.getString(PREF_BLOCKED_APPS, "") ?: ""
-            val blockedList = blockedApps.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-            if (blockedList.contains(pkg)) {
-                Log.d(TAG, "Block mode: closing $pkg")
-                performGlobalAction(GLOBAL_ACTION_HOME)
+            // ── Block mode ──────────────────────────────────────────────────────
+            val blockActive = prefs.getBoolean(PREF_BLOCK_ACTIVE, false)
+            if (blockActive) {
+                val blockedApps = prefs.getString(PREF_BLOCKED_APPS, "") ?: ""
+                val blockedList = blockedApps.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                if (blockedList.contains(pkg)) {
+                    Log.d(TAG, "Block mode: closing $pkg")
+                    performGlobalAction(GLOBAL_ACTION_HOME)
+                    return
+                }
+            }
+
+            // ── Bedtime mode ────────────────────────────────────────────────────
+            val bedtimeEnabled = prefs.getBoolean(PREF_BEDTIME_ENABLED, false)
+            if (bedtimeEnabled && isInBedtimeWindow()) {
+                val blockedApps = prefs.getString(PREF_BLOCKED_APPS, "") ?: ""
+                val blockedList = blockedApps.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                if (blockedList.contains(pkg)) {
+                    Log.d(TAG, "Bedtime mode: closing $pkg")
+                    performGlobalAction(GLOBAL_ACTION_HOME)
+                    return
+                }
+            }
+
+            // ── Browser Protection ──────────────────────────────────────────────
+            if (BROWSER_PACKAGES.contains(pkg)) {
+                val rootNode = rootInActiveWindow ?: return
+                try {
+                    handleBrowser(rootNode)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Browser processing error: ${e.message}")
+                } finally {
+                    try { rootNode.recycle() } catch (_: Exception) {}
+                }
                 return
             }
-        }
 
-        // ── Bedtime mode ────────────────────────────────────────────────────
-        val bedtimeEnabled = prefs.getBoolean(PREF_BEDTIME_ENABLED, false)
-        if (bedtimeEnabled && isInBedtimeWindow()) {
-            val blockedApps = prefs.getString(PREF_BLOCKED_APPS, "") ?: ""
-            val blockedList = blockedApps.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-            if (blockedList.contains(pkg)) {
-                Log.d(TAG, "Bedtime mode: closing $pkg")
-                performGlobalAction(GLOBAL_ACTION_HOME)
-                return
-            }
-        }
+            // Only process specific apps natively
+            val supportedNativeApps = listOf(PKG_YOUTUBE, PKG_FACEBOOK, PKG_INSTAGRAM, PKG_TIKTOK)
+            if (!supportedNativeApps.contains(pkg)) return
 
-        // ── Browser Protection ──────────────────────────────────────────────
-        if (BROWSER_PACKAGES.contains(pkg)) {
             val rootNode = rootInActiveWindow ?: return
             try {
-                handleBrowser(rootNode)
+                when (pkg) {
+                    PKG_YOUTUBE -> handleYoutube(rootNode)
+                    PKG_FACEBOOK -> handleFacebook(rootNode)
+                    PKG_INSTAGRAM -> handleInstagram(rootNode)
+                    PKG_TIKTOK -> handleTiktok(rootNode)
+                }
             } catch (e: Exception) {
-                Log.e(TAG, "Browser processing error: ${e.message}")
+                Log.e(TAG, "Event processing error: ${e.message}")
             } finally {
                 try { rootNode.recycle() } catch (_: Exception) {}
             }
-            return
-        }
-
-        // Only process specific apps natively
-        val supportedNativeApps = listOf(PKG_YOUTUBE, PKG_FACEBOOK, PKG_INSTAGRAM, PKG_TIKTOK)
-        if (!supportedNativeApps.contains(pkg)) return
-
-        val rootNode = rootInActiveWindow ?: return
-        try {
-            when (pkg) {
-                PKG_YOUTUBE -> handleYoutube(rootNode)
-                PKG_FACEBOOK -> handleFacebook(rootNode)
-                PKG_INSTAGRAM -> handleInstagram(rootNode)
-                PKG_TIKTOK -> handleTiktok(rootNode)
-            }
         } catch (e: Exception) {
-            Log.e(TAG, "Event processing error: ${e.message}")
-        } finally {
-            try { rootNode.recycle() } catch (_: Exception) {}
+            Log.e(TAG, "onAccessibilityEvent crashed: ${e.message}")
         }
     }
 

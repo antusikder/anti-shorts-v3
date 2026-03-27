@@ -15,8 +15,9 @@ class LauncherModule(reactContext: ReactApplicationContext) : ReactContextBaseJa
         val context = reactApplicationContext
         val pm = context.packageManager
         
-        val mainActivity = ComponentName(context, "com.antishorts.shield.MainActivity")
-        val calculatorAlias = ComponentName(context, "com.antishorts.shield.CalculatorActivityAlias")
+        val pkg = context.packageName
+        val mainActivity = ComponentName(pkg, "$pkg.MainActivity")
+        val calculatorAlias = ComponentName(pkg, "$pkg.CalculatorActivityAlias")
 
         if (iconName == "calculator") {
             // Enable calculator, disable main
