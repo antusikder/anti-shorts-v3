@@ -87,7 +87,7 @@ export default function SettingsScreen() {
       >
         <View style={s.header}>
           <Text style={s.title}>Settings</Text>
-          <Text style={s.subtitle}>Customise your Productive experience</Text>
+          <Text style={s.subtitle}>Customise your Mind experience</Text>
         </View>
 
         <View style={s.card}>
@@ -121,11 +121,20 @@ export default function SettingsScreen() {
         <View style={s.card}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 }}>
             <Feather name="info" size={18} color={C.textSecondary} />
-            <Text style={s.cardTitle}>About Productive</Text>
+            <Text style={s.cardTitle}>About Mind</Text>
           </View>
-          <Text style={s.aboutText}>Version 2.0.0</Text>
-          <Text style={s.aboutText}>Accessibility Service is {settings.isServiceEnabled ? "Active" : "Inactive"}</Text>
+          <Text style={s.aboutText}>Version 3.0.0</Text>
+          <Text style={s.aboutText}>Accessibility Service: {settings.isServiceEnabled ? "Active" : "Inactive"}</Text>
           
+          <View style={s.creditsBox}>
+             <Text style={s.creditHeader}>Creator:</Text>
+             <Text style={s.creditText}>Alman Sikder</Text>
+             <Text style={s.creditSub}>Alman studies Meteorology at University of Dhaka</Text>
+             <Text style={{...s.creditHeader, marginTop: 8}}>Dedicated to:</Text>
+             <Text style={s.creditText}>Meghla</Text>
+             <Text style={{...s.creditSub, marginTop: 12}}>Copyright © {new Date().getFullYear()}</Text>
+          </View>
+
           <TouchableOpacity
             style={s.resetBtn}
             onPress={() => Alert.alert("Reset Stats", "Clear all time stats today?", [
@@ -160,6 +169,10 @@ const s = StyleSheet.create({
   divider: { height: 1, backgroundColor: C.border, marginVertical: 2 },
   endNote: { fontSize: 12, fontFamily: "Inter_400Regular", color: C.textMuted, textAlign: "center", marginTop: 16 },
   aboutText: { fontSize: 14, fontFamily: "Inter_400Regular", color: C.textSecondary, marginBottom: 6 },
+  creditsBox: { marginTop: 16, padding: 16, backgroundColor: C.backgroundSecondary, borderRadius: 12 },
+  creditHeader: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: C.textMuted, textTransform: "uppercase", letterSpacing: 0.5 },
+  creditText: { fontSize: 16, fontFamily: "Inter_700Bold", color: C.text, marginTop: 2 },
+  creditSub: { fontSize: 12, fontFamily: "Inter_400Regular", color: C.textSecondary, marginTop: 4, fontStyle: "italic" },
   resetBtn: { marginTop: 16, alignSelf: "flex-start", paddingVertical: 8, paddingHorizontal: 14, borderRadius: 12, backgroundColor: C.danger + "22" },
   resetBtnText: { color: C.danger, fontSize: 13, fontFamily: "Inter_600SemiBold" },
 });

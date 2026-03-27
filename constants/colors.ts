@@ -1,30 +1,30 @@
-// Productive — design token palette
-// Cozy deep-space + warm amber + soft indigo
+// Mind — design token palette
+// Cozy light chocolate brownish + warm caramel + soft mocha
 
-const primary    = "#7C6FFF"; // Soft indigo
-const primaryDark= "#5A4ECC";
-const amber      = "#FFB347"; // Warm amber accent
-const green      = "#3DDC84"; // Success green
-const red        = "#FF5C5C"; // Danger
-const blue       = "#4A9EFF"; // Info blue
+const primary    = "#A67B5B"; // Soft Milk Chocolate
+const primaryDark= "#8B5A2B";
+const amber      = "#DEB887"; // Burlywood / Warm Caramel
+const green      = "#8FBC8F"; // Dark Sea Green (cozy sage)
+const red        = "#CD5C5C"; // Indian Red (muted rose)
+const blue       = "#8BA4B5"; // Slate Blue (cozy denim)
 
 export default {
   dark: {
     // Backgrounds
-    background:          "#0D0B1E",  // Deep space navy
-    backgroundSecondary: "#141228",
-    backgroundCard:      "#1C1A32",
-    backgroundElevated:  "#242140",
-    backgroundGlass:     "rgba(28,26,50,0.85)",
+    background:          "#FDFBF7",  // Warm Cream
+    backgroundSecondary: "#F5F0EA",  // Soft Latte
+    backgroundCard:      "#FFFFFF",  // Clean White for cards
+    backgroundElevated:  "#EBE3D5",  // Light Mocha
+    backgroundGlass:     "rgba(255, 255, 255, 0.85)",
 
     // Borders
-    border:              "#2E2A50",
-    borderLight:         "#3A356A",
+    border:              "#E6DCCC",
+    borderLight:         "#F0EAE1",
 
     // Text
-    text:                "#F0EEFF",
-    textSecondary:       "#9B98D0",
-    textMuted:           "#5C5888",
+    text:                "#4A3B32",  // Deep Espresso
+    textSecondary:       "#7C6A5D",  // Warm Taupe
+    textMuted:           "#A4988E",  // Soft Ash Brown
 
     // Accents
     tint:                primary,
@@ -38,23 +38,23 @@ export default {
     info:                blue,
 
     // Platform
-    youtube:             "#FF3B30",
-    facebook:            "#4A9EFF",
+    youtube:             "#CD5C5C",
+    facebook:            "#8BA4B5",
 
     // UI
-    tabIconDefault:      "#5C5888",
+    tabIconDefault:      "#A4988E",
     tabIconSelected:     primary,
-    switchTrack:         "#2E2A50",
-    switchThumb:         "#F0EEFF",
+    switchTrack:         "#EBE3D5",
+    switchThumb:         "#FFFFFF",
 
     // Gradient stops (for LinearGradient)
-    gradStart:           "#0D0B1E",
-    gradMid:             "#141228",
-    gradEnd:             "#0D0B1E",
+    gradStart:           "#FDFBF7",
+    gradMid:             "#F5F0EA",
+    gradEnd:             "#FDFBF7",
 
     // Planner
-    plannerAccent:       "#A78BFA",  // Soft violet
-    breakColor:          "#34D399",  // Mint
-    strictColor:         "#F87171",  // Warm red
+    plannerAccent:       "#C19A6B",  // Camel
+    breakColor:          "#8FBC8F",  // Sage
+    strictColor:         "#CD5C5C",  // Rose
   },
 };

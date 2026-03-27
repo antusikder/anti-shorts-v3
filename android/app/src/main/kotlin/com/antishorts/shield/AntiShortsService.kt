@@ -11,12 +11,12 @@ import android.view.accessibility.AccessibilityNodeInfo
 import java.util.Calendar
 
 /**
- * ProductiveService (formerly AntiShortsService)
+ * ProductiveService -> Mind Service
  *
  * Architecture:
  * - Monitors YouTube and Facebook for Shorts/Reels (configurable)
  * - Differentiates Shorts from general videos by menu item count
- *   (Shorts three-dot menu has exactly 1 item; general videos have 3+)
+ * - Detects and blocks web-browser instances of shorts
  * - Reads SharedPreferences fresh on every event — settings always current
  * - Blocks configured apps during active schedule sessions or bedtime
  * - Smart throttling: only wakes on relevant window events
@@ -47,9 +47,18 @@ class AntiShortsService : AccessibilityService() {
         const val PREF_BEDTIME_END_H    = "bedtime_end_hour"
         const val PREF_BEDTIME_END_M    = "bedtime_end_min"
 
-        // Target packages
         const val PKG_YOUTUBE          = "com.google.android.youtube"
         const val PKG_FACEBOOK         = "com.facebook.katana"
+
+        // Browser packages for web protection
+        val BROWSER_PACKAGES = listOf(
+            "com.android.chrome",
+            "com.brave.browser",
+            "org.mozilla.firefox",
+            "com.opera.browser",
+            "com.microsoft.emmx",
+            "com.sec.android.app.sbrowser"
+        )
 
         // Default scan interval (balanced mode)
         const val DEFAULT_SCAN_INTERVAL = 150L
@@ -74,8 +83,7 @@ class AntiShortsService : AccessibilityService() {
         val YT_FEWER_SHORTS_TEXT = listOf(
             "Don't recommend Shorts from this channel",
             "Fewer Shorts",
-            "Show fewer Shorts",
-            "Not interested"
+            "Show fewer Shorts"
         )
 
         // Facebook Reels identifiers
@@ -104,9 +112,11 @@ class AntiShortsService : AccessibilityService() {
     private var currentPkg = ""
     private lateinit var prefs: SharedPreferences
 
-    // Track menu-open attempts to avoid infinite retries
     private var menuOpenAttemptPkg = ""
     private var menuOpenAttemptTime = 0L
+
+    // Debounce tracker for back press action (to prevent erratic flashing)
+    private var lastBackPressTime = 0L
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -155,7 +165,20 @@ class AntiShortsService : AccessibilityService() {
             }
         }
 
-        // Only process YT and FB for shorts/reels removal
+        // ── Browser Protection ──────────────────────────────────────────────
+        if (BROWSER_PACKAGES.contains(pkg)) {
+            val rootNode = rootInActiveWindow ?: return
+            try {
+                handleBrowser(rootNode)
+            } catch (e: Exception) {
+                Log.e(TAG, "Browser processing error: ${e.message}")
+            } finally {
+                try { rootNode.recycle() } catch (_: Exception) {}
+            }
+            return
+        }
+
+        // Only process YT and FB native apps for shorts/reels removal
         if (pkg != PKG_YOUTUBE && pkg != PKG_FACEBOOK) return
 
         val rootNode = rootInActiveWindow ?: return
@@ -203,8 +226,12 @@ class AntiShortsService : AccessibilityService() {
 
         // Priority 1: Auto-back from Shorts player
         if (prefs.getBoolean(PREF_YT_AUTO_BACK, true) && isShortsPlayerVisible(root)) {
-            Log.d(TAG, "YT Shorts player — firing BACK")
-            performGlobalAction(GLOBAL_ACTION_BACK)
+            val now = System.currentTimeMillis()
+            if (now - lastBackPressTime > 3000L) {
+                Log.d(TAG, "YT Shorts player — firing BACK")
+                lastBackPressTime = now
+                performGlobalAction(GLOBAL_ACTION_BACK)
+            }
             return
         }
 
@@ -232,7 +259,7 @@ class AntiShortsService : AccessibilityService() {
             if (nodes.isNotEmpty()) {
                 // Use the first valid node
                 for (node in nodes) {
-                    val menuBtn = findMenuButtonNear(root, node)
+                    val menuBtn = findMenuButtonNear(node)
                     if (menuBtn != null) {
                         openMenuAndDismissIfShort(menuBtn, YT_FEWER_SHORTS_TEXT, "YT Shorts shelf")
                         nodes.forEach { try { it.recycle() } catch (_: Exception) {} }
@@ -262,7 +289,7 @@ class AntiShortsService : AccessibilityService() {
             val nodes = root.findAccessibilityNodeInfosByText(text)
             if (nodes.isNotEmpty()) {
                 for (node in nodes) {
-                    val menuBtn = findMenuButtonNear(root, node)
+                    val menuBtn = findMenuButtonNear(node)
                     if (menuBtn != null) {
                         openMenuAndDismissIfShort(menuBtn, FB_FEWER_REELS_TEXT, "FB Reels shelf")
                         nodes.forEach { try { it.recycle() } catch (_: Exception) {} }
@@ -381,30 +408,38 @@ class AntiShortsService : AccessibilityService() {
     // ════════════════════════════════════════════════════════════════════════
 
     /**
-     * Finds the three-dot (overflow) menu button near a shorts/reels node.
-     * Searches the whole tree by content description first, then walks parents.
+     * Finds the three-dot (overflow) menu button strictly WITHIN the parent chain 
+     * of the exact shorts/reels node. This avoids accidentally opening ad menus 
+     * located elsewhere on the screen.
      */
-    private fun findMenuButtonNear(
-        root: AccessibilityNodeInfo,
-        nearNode: AccessibilityNodeInfo
-    ): AccessibilityNodeInfo? {
-        // Global search by content desc
-        for (desc in MENU_BUTTON_DESCS) {
-            val nodes = root.findAccessibilityNodeInfosByText(desc)
-            if (nodes.isNotEmpty()) {
-                val result = nodes.firstOrNull { it.isClickable && it.isVisibleToUser }
-                nodes.forEach { if (it != result) try { it.recycle() } catch (_: Exception) {} }
-                if (result != null) return result
-            }
-        }
-        // Walk up the parent chain of nearNode looking for a sibling overflow button
+    private fun findMenuButtonNear(nearNode: AccessibilityNodeInfo): AccessibilityNodeInfo? {
         var parent: AccessibilityNodeInfo? = nearNode.parent
         var depth = 0
         while (parent != null && depth < 6) {
-            val desc = parent.contentDescription?.toString()?.lowercase() ?: ""
-            if (parent.isClickable && (desc.contains("more") || desc.contains("option") || desc.contains("menu"))) {
+            // Check if this parent itself is the menu button
+            val parentDesc = parent.contentDescription?.toString()?.lowercase() ?: ""
+            if (parent.isClickable && parent.isVisibleToUser &&
+                (parentDesc.contains("more") || parentDesc.contains("option") || parentDesc.contains("menu"))) {
                 return parent
             }
+            
+            // Search direct children of this parent container
+            for (i in 0 until parent.childCount) {
+                val child = parent.getChild(i) ?: continue
+                val childDesc = child.contentDescription?.toString()?.lowercase() ?: ""
+                if (child.isClickable && child.isVisibleToUser &&
+                    (childDesc.contains("more") || childDesc.contains("option") || childDesc.contains("menu"))) {
+                    return child
+                }
+                try { child.recycle() } catch (_: Exception) {}
+            }
+            
+            // Stop climbing if we hit a full list container to avoid scanning the entire feed
+            val className = parent.className?.toString() ?: ""
+            if (className.contains("RecyclerView") || className.contains("ListView")) {
+                break
+            }
+
             val next = parent.parent
             try { parent.recycle() } catch (_: Exception) {}
             parent = next
@@ -412,6 +447,40 @@ class AntiShortsService : AccessibilityService() {
         }
         try { parent?.recycle() } catch (_: Exception) {}
         return null
+    }
+
+    private fun handleBrowser(root: AccessibilityNodeInfo) {
+        val ytEnabled = prefs.getBoolean(PREF_YT_ENABLED, true)
+        val fbEnabled = prefs.getBoolean(PREF_FB_ENABLED, true)
+        
+        if (!ytEnabled && !fbEnabled) return
+        
+        val now = System.currentTimeMillis()
+        if (now - lastBackPressTime < 3000L) return
+
+        var found = false
+        
+        // Search text for the shorts/reels URL path in url bar or content
+        if (ytEnabled) {
+            val nodes = root.findAccessibilityNodeInfosByText("youtube.com/shorts")
+            if (nodes.isNotEmpty()) {
+                found = true
+                nodes.forEach { it.recycle() }
+            }
+        }
+        if (!found && fbEnabled) {
+            val nodes = root.findAccessibilityNodeInfosByText("facebook.com/reel")
+            if (nodes.isNotEmpty()) {
+                found = true
+                nodes.forEach { it.recycle() }
+            }
+        }
+        
+        if (found) {
+            Log.d(TAG, "Browser Shorts/Reels detected — pressing BACK")
+            lastBackPressTime = now
+            performGlobalAction(GLOBAL_ACTION_BACK)
+        }
     }
 
     private fun findClickableParent(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {

@@ -38,3 +38,5 @@ yarn-error.*
 .vercel
 
 .env
+node20.tar.xz
+node-v20.18.0-linux-x64

@@ -1,5 +1,5 @@
 <resources>
-  <string name="app_name">Productive</string>
+  <string name="app_name">Mind</string>
   <string name="accessibility_service_label">Productive — Digital Wellness</string>
   <string name="expo_splash_screen_resize_mode" translatable="false">contain</string>
   <string name="expo_splash_screen_status_bar_translucent" translatable="false">false</string>
