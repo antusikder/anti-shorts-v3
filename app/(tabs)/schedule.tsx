@@ -8,6 +8,7 @@ import {
   Modal,
   Platform,
   Alert,
+  useColorScheme,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -18,10 +19,8 @@ import Colors from "@/constants/colors";
 import { usePlanner, ScheduleSlot } from "@/context/PlannerContext";
 import { AccessibilityModule, InstalledApp } from "@/modules/AccessibilityModule";
 
-const C = Colors.dark;
-
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const APP_COLORS = [C.tint, C.youtube, C.facebook, C.amber, C.green, C.info];
+const getAppColors = (C: any) => [C.tint, C.youtube, C.facebook, C.amber, C.green, C.info];
 
 function pad2(n: number) { return n.toString().padStart(2, "0"); }
 
@@ -31,9 +30,11 @@ function formatSlotTime(h: number, m: number) {
   return `${h12}:${pad2(m)} ${period}`;
 }
 
-function SlotCard({ slot, onDelete }: { slot: ScheduleSlot; onDelete: () => void }) {
+function SlotCard({ slot, onDelete, C }: { slot: ScheduleSlot; onDelete: () => void; C: any }) {
   const dayLabel = DAY_LABELS[slot.dayOfWeek];
+  const APP_COLORS = getAppColors(C);
   const appColor = APP_COLORS[slot.appPkg.length % APP_COLORS.length];
+  const sc = getSc(C);
   return (
     <View style={sc.slotCard}>
       <View style={[sc.slotDayBadge, { backgroundColor: C.tint + "22" }]}>
@@ -59,13 +60,16 @@ function TimeStepper({
   onHourChange,
   onMinChange,
   label,
+  C,
 }: {
   hour: number;
   min: number;
   onHourChange: (h: number) => void;
   onMinChange: (m: number) => void;
   label: string;
+  C: any;
 }) {
+  const ts = getTs(C);
   return (
     <View style={{ alignItems: "center", gap: 4 }}>
       <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: C.textMuted }}>{label}</Text>
@@ -98,11 +102,14 @@ function AddSlotModal({
   visible,
   onDismiss,
   onAdd,
+  C,
 }: {
   visible: boolean;
   onDismiss: () => void;
   onAdd: (slot: Omit<ScheduleSlot, "id">) => void;
+  C: any;
 }) {
+  const modal = getModal(C);
   const [step, setStep] = useState<"app" | "time">("app");
   const [apps, setApps] = useState<InstalledApp[]>([]);
   const [loading, setLoading] = useState(false);
@@ -190,11 +197,11 @@ function AddSlotModal({
 
               {/* Time selectors */}
               <View style={{ flexDirection: "row", justifyContent: "space-around", marginTop: 12 }}>
-                <TimeStepper hour={startH} min={startM} onHourChange={setStartH} onMinChange={setStartM} label="From" />
+                <TimeStepper C={C} hour={startH} min={startM} onHourChange={setStartH} onMinChange={setStartM} label="From" />
                 <View style={{ alignSelf: "center" }}>
                   <Text style={{ color: C.textMuted, fontSize: 20 }}>→</Text>
                 </View>
-                <TimeStepper hour={endH} min={endM} onHourChange={setEndH} onMinChange={setEndM} label="Until" />
+                <TimeStepper C={C} hour={endH} min={endM} onHourChange={setEndH} onMinChange={setEndM} label="Until" />
               </View>
 
               <Text style={{ color: C.textMuted, fontSize: 12, textAlign: "center", marginTop: 8, fontFamily: "Inter_400Regular" }}>
@@ -214,6 +221,10 @@ function AddSlotModal({
 }
 
 export default function ScheduleScreen() {
+  const colorScheme = useColorScheme();
+  const C = Colors[colorScheme === "dark" ? "dark" : "light"];
+  const styles = getStyles(C);
+
   const insets = useSafeAreaInsets();
   const { scheduleSlots, addScheduleSlot, removeScheduleSlot } = usePlanner();
   const [showAdd, setShowAdd] = useState(false);
@@ -281,6 +292,7 @@ export default function ScheduleScreen() {
               <SlotCard
                 key={slot.id}
                 slot={slot}
+                C={C}
                 onDelete={() => Alert.alert(
                   "Delete Rule",
                   `Remove schedule for ${slot.appName}?`,
@@ -292,12 +304,12 @@ export default function ScheduleScreen() {
         )}
       </ScrollView>
 
-      <AddSlotModal visible={showAdd} onDismiss={() => setShowAdd(false)} onAdd={addScheduleSlot} />
+      <AddSlotModal C={C} visible={showAdd} onDismiss={() => setShowAdd(false)} onAdd={addScheduleSlot} />
     </LinearGradient>
   );
 }
 
-const sc = StyleSheet.create({
+const getSc = (C: any) => StyleSheet.create({
   slotCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -316,13 +328,13 @@ const sc = StyleSheet.create({
   delBtn: { padding: 6 },
 });
 
-const ts = StyleSheet.create({
+const getTs = (C: any) => StyleSheet.create({
   stepBtn: { width: 28, height: 28, alignItems: "center", justifyContent: "center" },
   val: { fontSize: 22, fontFamily: "Inter_700Bold", color: C.text, minWidth: 36, textAlign: "center" },
   colon: { fontSize: 22, fontFamily: "Inter_700Bold", color: C.tint, marginBottom: 4 },
 });
 
-const modal = StyleSheet.create({
+const getModal = (C: any) => StyleSheet.create({
   overlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.6)" },
   sheet: { backgroundColor: C.backgroundCard, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, gap: 14, paddingBottom: 34 },
   title: { fontSize: 20, fontFamily: "Inter_700Bold", color: C.text },
@@ -339,7 +351,7 @@ const modal = StyleSheet.create({
   addText: { fontSize: 15, fontFamily: "Inter_600SemiBold", color: "#fff" },
 });
 
-const styles = StyleSheet.create({
+const getStyles = (C: any) => StyleSheet.create({
   header: { paddingHorizontal: 20, marginBottom: 16 },
   title: { fontSize: 28, fontFamily: "Inter_700Bold", color: C.text },
   subtitle: { fontSize: 14, fontFamily: "Inter_400Regular", color: C.textMuted, marginTop: 4 },

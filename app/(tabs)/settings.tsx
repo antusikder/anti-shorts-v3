@@ -8,6 +8,7 @@ import {
   Switch,
   Platform,
   Alert,
+  useColorScheme,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -18,17 +19,18 @@ import Colors from "@/constants/colors";
 import { useSettings } from "@/context/SettingsContext";
 import { AccessibilityModule, InstalledApp } from "@/modules/AccessibilityModule";
 
-const C = Colors.dark;
-
 function AppToggleRow({
   app,
   isBlocked,
   onToggle,
+  C,
 }: {
   app: InstalledApp;
   isBlocked: boolean;
   onToggle: (v: boolean) => void;
+  C: any;
 }) {
+  const ar = getAr(C);
   return (
     <View style={ar.row}>
       <View style={ar.iconBg}>
@@ -49,6 +51,10 @@ function AppToggleRow({
 }
 
 export default function SettingsScreen() {
+  const colorScheme = useColorScheme();
+  const C = Colors[colorScheme === "dark" ? "dark" : "light"];
+  const s = getS(C);
+  
   const insets = useSafeAreaInsets();
   const { settings, updateBlockList } = useSettings();
   const [apps, setApps] = useState<InstalledApp[]>([]);
@@ -106,6 +112,7 @@ export default function SettingsScreen() {
               {apps.slice(0, 50).map((app) => (
                 <View key={app.pkg}>
                   <AppToggleRow
+                    C={C}
                     app={app}
                     isBlocked={settings.blockList.includes(app.pkg)}
                     onToggle={(v) => toggleApp(app.pkg, v)}
@@ -121,17 +128,15 @@ export default function SettingsScreen() {
         <View style={s.card}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 }}>
             <Feather name="info" size={18} color={C.textSecondary} />
-            <Text style={s.cardTitle}>About Mind</Text>
+            <Text style={s.cardTitle}>About Fresh Mind</Text>
           </View>
           <Text style={s.aboutText}>Version 3.0.0</Text>
           <Text style={s.aboutText}>Accessibility Service: {settings.isServiceEnabled ? "Active" : "Inactive"}</Text>
           
           <View style={s.creditsBox}>
-             <Text style={s.creditHeader}>Creator:</Text>
+             <Text style={s.creditHeader}>Creator & Developer:</Text>
              <Text style={s.creditText}>Alman Sikder</Text>
              <Text style={s.creditSub}>Alman studies Meteorology at University of Dhaka</Text>
-             <Text style={{...s.creditHeader, marginTop: 8}}>Dedicated to:</Text>
-             <Text style={s.creditText}>Meghla</Text>
              <Text style={{...s.creditSub, marginTop: 12}}>Copyright © {new Date().getFullYear()}</Text>
           </View>
 
@@ -151,14 +156,14 @@ export default function SettingsScreen() {
   );
 }
 
-const ar = StyleSheet.create({
+const getAr = (C: any) => StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10 },
   iconBg: { width: 36, height: 36, borderRadius: 10, backgroundColor: C.backgroundElevated, alignItems: "center", justifyContent: "center" },
   iconText: { fontSize: 16, fontFamily: "Inter_600SemiBold", color: C.text },
   name: { flex: 1, fontSize: 15, fontFamily: "Inter_500Medium", color: C.text },
 });
 
-const s = StyleSheet.create({
+const getS = (C: any) => StyleSheet.create({
   header: { paddingHorizontal: 20, marginBottom: 16 },
   title: { fontSize: 28, fontFamily: "Inter_700Bold", color: C.text },
   subtitle: { fontSize: 14, fontFamily: "Inter_400Regular", color: C.textMuted, marginTop: 4 },

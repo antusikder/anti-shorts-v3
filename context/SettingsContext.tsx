@@ -20,6 +20,8 @@ export interface BedtimeSettings {
 
 export interface Settings {
   isServiceEnabled: boolean;
+  systemEnabled: boolean; // master toggle
+  skipAds: boolean;
   youtube: {
     enabled: boolean;
     removeShorts: boolean;
@@ -30,6 +32,12 @@ export interface Settings {
     removeReels: boolean;
     autoBack: boolean;
   };
+  instagram: {
+    enabled: boolean;
+  };
+  tiktok: {
+    enabled: boolean;
+  };
   scanSpeed: ScanSpeed;
   bedtime: BedtimeSettings;
   blockList: string[]; // package names to block
@@ -37,8 +45,10 @@ export interface Settings {
   stats: {
     shortsShieldedToday: number;
     reelsRejectedToday: number;
+    adsRemovedToday: number;
     totalShortsShielded: number;
     totalReelsRejected: number;
+    totalAdsRemoved: number;
     lastResetDate: string;
   };
 }
@@ -51,6 +61,8 @@ const SCAN_SPEED_MAP: Record<ScanSpeed, number> = {
 
 const defaultSettings: Settings = {
   isServiceEnabled: false,
+  systemEnabled: true,
+  skipAds: true,
   youtube: {
     enabled: true,
     removeShorts: true,
@@ -61,6 +73,8 @@ const defaultSettings: Settings = {
     removeReels: true,
     autoBack: false,
   },
+  instagram: { enabled: true },
+  tiktok: { enabled: true },
   scanSpeed: "balanced",
   bedtime: {
     enabled: false,
@@ -80,8 +94,10 @@ const defaultSettings: Settings = {
   stats: {
     shortsShieldedToday: 0,
     reelsRejectedToday: 0,
+    adsRemovedToday: 0,
     totalShortsShielded: 0,
     totalReelsRejected: 0,
+    totalAdsRemoved: 0,
     lastResetDate: new Date().toDateString(),
   },
 };
@@ -92,12 +108,16 @@ interface SettingsContextType {
   settings: Settings;
   updateYoutube: (key: keyof Settings["youtube"], value: boolean) => void;
   updateFacebook: (key: keyof Settings["facebook"], value: boolean) => void;
+  updateInstagram: (value: boolean) => void;
+  updateTiktok: (value: boolean) => void;
+  updateSkipAds: (value: boolean) => void;
+  updateSystemEnabled: (value: boolean) => void;
   updateScanSpeed: (speed: ScanSpeed) => void;
   updateBedtime: (bedtime: BedtimeSettings) => void;
   updateBlockList: (list: string[]) => void;
   setBlockActive: (active: boolean) => void;
   setServiceEnabled: (enabled: boolean) => void;
-  incrementStat: (stat: "shorts" | "reels") => void;
+  incrementStat: (stat: "shorts" | "reels" | "ads") => void;
   isLoaded: boolean;
 }
 
@@ -127,12 +147,17 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         if (parsed.stats.lastResetDate !== today) {
           parsed.stats.shortsShieldedToday = 0;
           parsed.stats.reelsRejectedToday = 0;
+          parsed.stats.adsRemovedToday = 0;
           parsed.stats.lastResetDate = today;
         }
         // Merge defaults for new keys
         parsed.youtube = { ...defaultSettings.youtube, ...parsed.youtube };
         parsed.facebook = { ...defaultSettings.facebook, ...parsed.facebook };
+        parsed.instagram = { ...defaultSettings.instagram, ...parsed.instagram };
+        parsed.tiktok = { ...defaultSettings.tiktok, ...parsed.tiktok };
         parsed.bedtime = { ...defaultSettings.bedtime, ...parsed.bedtime };
+        if (parsed.systemEnabled === undefined) parsed.systemEnabled = true;
+        if (parsed.skipAds === undefined) parsed.skipAds = true;
         if (!parsed.blockList) parsed.blockList = defaultSettings.blockList;
         if (parsed.blockActive === undefined) parsed.blockActive = false;
         setSettings(parsed);
@@ -157,6 +182,10 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       fbEnabled: s.facebook.enabled,
       facebookRemoveReels: s.facebook.removeReels,
       facebookAutoBack: s.facebook.autoBack,
+      igEnabled: s.instagram.enabled,
+      ttEnabled: s.tiktok.enabled,
+      skipAds: s.skipAds,
+      systemEnabled: s.systemEnabled,
       scanIntervalMs: SCAN_SPEED_MAP[s.scanSpeed],
       blockActive: s.blockActive,
       blockedApps: s.blockList.join(","),
@@ -190,6 +219,26 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       update((p) => ({ ...p, facebook: { ...p.facebook, [key]: value } })),
     [update]
   );
+  
+  const updateInstagram = useCallback(
+    (value: boolean) => update((p) => ({ ...p, instagram: { enabled: value } })),
+    [update]
+  );
+
+  const updateTiktok = useCallback(
+    (value: boolean) => update((p) => ({ ...p, tiktok: { enabled: value } })),
+    [update]
+  );
+
+  const updateSkipAds = useCallback(
+    (value: boolean) => update((p) => ({ ...p, skipAds: value })),
+    [update]
+  );
+
+  const updateSystemEnabled = useCallback(
+    (value: boolean) => update((p) => ({ ...p, systemEnabled: value })),
+    [update]
+  );
 
   const updateScanSpeed = useCallback(
     (speed: ScanSpeed) => update((p) => ({ ...p, scanSpeed: speed })),
@@ -217,15 +266,18 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   );
 
   const incrementStat = useCallback(
-    (stat: "shorts" | "reels") =>
+    (stat: "shorts" | "reels" | "ads") =>
       update((p) => {
         const s = { ...p.stats };
         if (stat === "shorts") {
           s.shortsShieldedToday += 1;
           s.totalShortsShielded += 1;
-        } else {
+        } else if (stat === "reels") {
           s.reelsRejectedToday += 1;
           s.totalReelsRejected += 1;
+        } else {
+          s.adsRemovedToday = (s.adsRemovedToday || 0) + 1;
+          s.totalAdsRemoved = (s.totalAdsRemoved || 0) + 1;
         }
         return { ...p, stats: s };
       }),
@@ -238,6 +290,10 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         settings,
         updateYoutube,
         updateFacebook,
+        updateInstagram,
+        updateTiktok,
+        updateSkipAds,
+        updateSystemEnabled,
         updateScanSpeed,
         updateBedtime,
         updateBlockList,

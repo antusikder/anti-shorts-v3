@@ -34,6 +34,10 @@ class AntiShortsService : AccessibilityService() {
         const val PREF_FB_ENABLED       = "fb_enabled"
         const val PREF_FB_REELS         = "fb_remove_reels"
         const val PREF_FB_AUTO_BACK     = "fb_auto_back"
+        const val PREF_IG_ENABLED       = "ig_enabled"
+        const val PREF_TT_ENABLED       = "tt_enabled"
+        const val PREF_SKIP_ADS         = "skip_ads"
+        const val PREF_SYSTEM_ENABLED   = "system_enabled"
         const val PREF_SCAN_INTERVAL    = "scan_interval_ms"
 
         // Block / strict mode
@@ -49,6 +53,8 @@ class AntiShortsService : AccessibilityService() {
 
         const val PKG_YOUTUBE          = "com.google.android.youtube"
         const val PKG_FACEBOOK         = "com.facebook.katana"
+        const val PKG_INSTAGRAM        = "com.instagram.android"
+        const val PKG_TIKTOK           = "com.zhiliaoapp.musically"
 
         // Browser packages for web protection
         val BROWSER_PACKAGES = listOf(
@@ -89,12 +95,21 @@ class AntiShortsService : AccessibilityService() {
         // Facebook Reels identifiers
         val FB_REELS_TEXT = listOf("Reel by", "Reels", "Reel •", "Watch Reel", "Reel ·")
 
-        // Facebook Fewer Reels menu options (Reels three-dot has 1 main relevant option)
+        // Instagram Reels identifiers
+        val IG_REELS_TEXT = listOf("Reels", "Reel")
+
+        // Facebook/Instagram Fewer Reels menu options
         val FB_FEWER_REELS_TEXT = listOf(
             "See fewer Reels",
             "Hide Reels",
             "Don't show Reels",
-            "Not interested in Reels"
+            "Not interested in Reels",
+            "Not interested" // IG sometimes uses this for Reels
+        )
+
+        // Ad Skipping identifiers
+        val SKIP_AD_TEXTS = listOf(
+            "Skip ad", "Skip Ads", "Close ad", "Close advertisement", "Skip"
         )
 
         // Three-dot button descriptions
@@ -141,6 +156,9 @@ class AntiShortsService : AccessibilityService() {
 
         currentPkg = pkg
 
+        // ── Master Switch ───────────────────────────────────────────────────
+        if (!prefs.getBoolean(PREF_SYSTEM_ENABLED, true)) return
+
         // ── Block mode ──────────────────────────────────────────────────────
         val blockActive = prefs.getBoolean(PREF_BLOCK_ACTIVE, false)
         if (blockActive) {
@@ -178,14 +196,17 @@ class AntiShortsService : AccessibilityService() {
             return
         }
 
-        // Only process YT and FB native apps for shorts/reels removal
-        if (pkg != PKG_YOUTUBE && pkg != PKG_FACEBOOK) return
+        // Only process specific apps natively
+        val supportedNativeApps = listOf(PKG_YOUTUBE, PKG_FACEBOOK, PKG_INSTAGRAM, PKG_TIKTOK)
+        if (!supportedNativeApps.contains(pkg)) return
 
         val rootNode = rootInActiveWindow ?: return
         try {
             when (pkg) {
                 PKG_YOUTUBE -> handleYoutube(rootNode)
                 PKG_FACEBOOK -> handleFacebook(rootNode)
+                PKG_INSTAGRAM -> handleInstagram(rootNode)
+                PKG_TIKTOK -> handleTiktok(rootNode)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Event processing error: ${e.message}")
@@ -224,10 +245,15 @@ class AntiShortsService : AccessibilityService() {
     private fun handleYoutube(root: AccessibilityNodeInfo) {
         if (!prefs.getBoolean(PREF_YT_ENABLED, true)) return
 
-        // Priority 1: Auto-back from Shorts player
+        // Priority 1: Skip Ads on playing videos
+        if (prefs.getBoolean(PREF_SKIP_ADS, true)) {
+            skipPlayingVideoAds(root)
+        }
+
+        // Priority 2: Auto-back from Shorts player
         if (prefs.getBoolean(PREF_YT_AUTO_BACK, true) && isShortsPlayerVisible(root)) {
             val now = System.currentTimeMillis()
-            if (now - lastBackPressTime > 3000L) {
+            if (now - lastBackPressTime > 500L) {
                 Log.d(TAG, "YT Shorts player — firing BACK")
                 lastBackPressTime = now
                 performGlobalAction(GLOBAL_ACTION_BACK)
@@ -235,10 +261,26 @@ class AntiShortsService : AccessibilityService() {
             return
         }
 
-        // Priority 2: Remove Shorts shelf from feed
+        // Priority 3: Remove Shorts shelf from feed
         if (prefs.getBoolean(PREF_YT_SHORTS, true)) {
             handleYtShortsInFeed(root)
         }
+    }
+
+    private fun skipPlayingVideoAds(root: AccessibilityNodeInfo) {
+        for (text in SKIP_AD_TEXTS) {
+            val nodes = root.findAccessibilityNodeInfosByText(text)
+            if (nodes.isNotEmpty()) {
+                for (node in nodes) {
+                    val target = if (node.isClickable) node else findClickableParent(node)
+                    if (target != null) {
+                        Log.d(TAG, "Skipping ad: '$text'")
+                        target.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                        try { target.recycle() } catch (_: Exception) {}
+                    }
+                    try { node.recycle() } catch (_: Exception) {}
+                }
+            }
     }
 
     private fun isShortsPlayerVisible(root: AccessibilityNodeInfo): Boolean {
@@ -299,6 +341,49 @@ class AntiShortsService : AccessibilityService() {
                 }
                 break
             }
+        }
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // INSTAGRAM & TIKTOK
+    // ════════════════════════════════════════════════════════════════════════
+
+    private fun handleInstagram(root: AccessibilityNodeInfo) {
+        if (!prefs.getBoolean(PREF_IG_ENABLED, true)) return
+
+        val now = System.currentTimeMillis()
+        if (now - lastBackPressTime < 500L) return
+
+        // IG Shorts/Reels are usually viewed in a dedicated tab.
+        // If "Reels" is highly visible in the top action bar or bottom nav is selected, we block.
+        // For simplicity, if we detect the Reels playing view, we back out.
+        var isReels = false
+        for (text in IG_REELS_TEXT) {
+            val nodes = root.findAccessibilityNodeInfosByText(text)
+            if (nodes.isNotEmpty()) {
+                val visible = nodes.any { it.isVisibleToUser }
+                nodes.forEach { try { it.recycle() } catch (_: Exception) {} }
+                if (visible) {
+                    isReels = true
+                    break
+                }
+            }
+        }
+
+        if (isReels) {
+            Log.d(TAG, "IG Reels detected — firing BACK")
+            lastBackPressTime = now
+            performGlobalAction(GLOBAL_ACTION_BACK)
+        }
+    }
+
+    private fun handleTiktok(root: AccessibilityNodeInfo) {
+        if (!prefs.getBoolean(PREF_TT_ENABLED, true)) return
+        val now = System.currentTimeMillis()
+        if (now - lastBackPressTime > 500L) {
+            Log.d(TAG, "TikTok blocked entirely — firing HOME")
+            lastBackPressTime = now
+            performGlobalAction(GLOBAL_ACTION_HOME)
         }
     }
 
@@ -452,11 +537,13 @@ class AntiShortsService : AccessibilityService() {
     private fun handleBrowser(root: AccessibilityNodeInfo) {
         val ytEnabled = prefs.getBoolean(PREF_YT_ENABLED, true)
         val fbEnabled = prefs.getBoolean(PREF_FB_ENABLED, true)
+        val igEnabled = prefs.getBoolean(PREF_IG_ENABLED, true)
+        val ttEnabled = prefs.getBoolean(PREF_TT_ENABLED, true)
         
-        if (!ytEnabled && !fbEnabled) return
+        if (!ytEnabled && !fbEnabled && !igEnabled && !ttEnabled) return
         
         val now = System.currentTimeMillis()
-        if (now - lastBackPressTime < 3000L) return
+        if (now - lastBackPressTime < 500L) return
 
         var found = false
         
@@ -475,9 +562,24 @@ class AntiShortsService : AccessibilityService() {
                 nodes.forEach { it.recycle() }
             }
         }
+        if (!found && igEnabled) {
+            val nodes = root.findAccessibilityNodeInfosByText("instagram.com/reel")
+            if (nodes.isNotEmpty()) {
+                found = true
+                nodes.forEach { it.recycle() }
+            }
+        }
+        if (!found && ttEnabled) {
+            val nodes = root.findAccessibilityNodeInfosByText("tiktok.com")
+            if (nodes.isNotEmpty()) {
+                // Because tiktok is fully short form
+                found = true
+                nodes.forEach { it.recycle() }
+            }
+        }
         
         if (found) {
-            Log.d(TAG, "Browser Shorts/Reels detected — pressing BACK")
+            Log.d(TAG, "Browser Shorts/Reels/TikTok detected — pressing BACK")
             lastBackPressTime = now
             performGlobalAction(GLOBAL_ACTION_BACK)
         }

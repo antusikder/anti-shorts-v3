@@ -10,6 +10,7 @@ import {
   Animated,
   Platform,
   Alert,
+  useColorScheme,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -20,16 +21,14 @@ import Colors from "@/constants/colors";
 import { usePlanner, PlannerTask } from "@/context/PlannerContext";
 import { useSettings } from "@/context/SettingsContext";
 
-const C = Colors.dark;
-
 function formatTime(seconds: number) {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
 }
 
-function CircularProgress({ progress, size = 120, color = C.tint, children }: {
-  progress: number; size?: number; color?: string; children?: React.ReactNode;
+function CircularProgress({ progress, size = 120, color, children, C }: {
+  progress: number; size?: number; color?: string; children?: React.ReactNode; C: any;
 }) {
   const r = (size - 10) / 2;
   const circ = 2 * Math.PI * r;
@@ -46,9 +45,9 @@ function CircularProgress({ progress, size = 120, color = C.tint, children }: {
             height: size,
             borderRadius: size / 2,
             borderWidth: 4,
-            borderColor: color,
+            borderColor: color || C.tint,
             borderTopColor: "transparent",
-            borderRightColor: progress > 0.5 ? color : "transparent",
+            borderRightColor: progress > 0.5 ? (color || C.tint) : "transparent",
             transform: [{ rotate: `${progress * 360 - 90}deg` }],
           }}
         />
@@ -66,13 +65,16 @@ function TaskCard({
   onStart,
   onComplete,
   onDelete,
+  C,
 }: {
   task: PlannerTask;
   isActive: boolean;
   onStart: () => void;
   onComplete: () => void;
   onDelete: () => void;
+  C: any;
 }) {
+  const tc = getTc(C);
   return (
     <View
       style={[
@@ -124,11 +126,14 @@ function AddTaskModal({
   visible,
   onDismiss,
   onAdd,
+  C,
 }: {
   visible: boolean;
   onDismiss: () => void;
   onAdd: (task: { title: string; durationMin: number; breakMin: number }) => void;
+  C: any;
 }) {
+  const modal = getModal(C);
   const [title, setTitle] = useState("");
   const [duration, setDuration] = useState(25);
   const [brk, setBrk] = useState(5);
@@ -198,6 +203,10 @@ function AddTaskModal({
 }
 
 export default function PlannerScreen() {
+  const colorScheme = useColorScheme();
+  const C = Colors[colorScheme === "dark" ? "dark" : "light"];
+  const ps = getPs(C);
+
   const insets = useSafeAreaInsets();
   const { tasks, strictMode, activeSession, addTask, removeTask, toggleCompleted, setStrictMode, startSession, endSession } = usePlanner();
   const { settings, setBlockActive } = useSettings();
@@ -251,7 +260,7 @@ export default function PlannerScreen() {
         {/* Progress Ring */}
         {tasks.length > 0 && (
           <View style={ps.ringWrap}>
-            <CircularProgress progress={progress} size={130} color={C.plannerAccent}>
+            <CircularProgress C={C} progress={progress} size={130} color={C.plannerAccent}>
               <Text style={ps.ringNum}>{completedCount}/{tasks.length}</Text>
               <Text style={ps.ringLabel}>done</Text>
             </CircularProgress>
@@ -318,6 +327,7 @@ export default function PlannerScreen() {
           {tasks.map((task) => (
             <TaskCard
               key={task.id}
+              C={C}
               task={task}
               isActive={activeSession.phase !== "idle" && activeSession.taskId === task.id}
               onStart={() => {
@@ -340,6 +350,7 @@ export default function PlannerScreen() {
       </ScrollView>
 
       <AddTaskModal
+        C={C}
         visible={showAdd}
         onDismiss={() => setShowAdd(false)}
         onAdd={addTask}
@@ -348,7 +359,7 @@ export default function PlannerScreen() {
   );
 }
 
-const tc = StyleSheet.create({
+const getTc = (C: any) => StyleSheet.create({
   card: {
     flexDirection: "row",
     alignItems: "center",
@@ -381,7 +392,7 @@ const tc = StyleSheet.create({
   deleteBtn: { padding: 4 },
 });
 
-const modal = StyleSheet.create({
+const getModal = (C: any) => StyleSheet.create({
   overlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.6)" },
   sheet: { backgroundColor: C.backgroundCard, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, gap: 16 },
   title: { fontSize: 20, fontFamily: "Inter_700Bold", color: C.text },
@@ -398,7 +409,7 @@ const modal = StyleSheet.create({
   addText: { fontSize: 15, fontFamily: "Inter_600SemiBold", color: "#fff" },
 });
 
-const ps = StyleSheet.create({
+const getPs = (C: any) => StyleSheet.create({
   header: { paddingHorizontal: 20, marginBottom: 16 },
   date: { fontSize: 12, fontFamily: "Inter_400Regular", color: C.textMuted, marginBottom: 4 },
   title: { fontSize: 28, fontFamily: "Inter_700Bold", color: C.text },

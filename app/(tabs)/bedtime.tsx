@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Platform,
   Switch,
+  useColorScheme,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -15,8 +16,6 @@ import * as Haptics from "expo-haptics";
 
 import Colors from "@/constants/colors";
 import { useSettings, BedtimeSettings } from "@/context/SettingsContext";
-
-const C = Colors.dark;
 
 function pad2(n: number) { return n.toString().padStart(2, "0"); }
 
@@ -35,7 +34,7 @@ function sleepDurationHours(startH: number, startM: number, endH: number, endM: 
   return (end - start) / 60;
 }
 
-function getSleepRating(hours: number) {
+function getSleepRating(hours: number, C: any) {
   if (hours >= 8) return { text: "Excellent", color: C.green };
   if (hours >= 7) return { text: "Good", color: C.tint };
   if (hours >= 6) return { text: "Fair", color: C.amber };
@@ -48,13 +47,16 @@ function TimeWheel({
   minute,
   onHourChange,
   onMinChange,
+  C,
 }: {
   label: string;
   hour: number;
   minute: number;
   onHourChange: (h: number) => void;
   onMinChange: (m: number) => void;
+  C: any;
 }) {
+  const tw = getTw(C);
   return (
     <View style={tw.wrap}>
       <Text style={tw.label}>{label}</Text>
@@ -93,12 +95,16 @@ function TimeWheel({
 }
 
 export default function BedtimeScreen() {
+  const colorScheme = useColorScheme();
+  const C = Colors[colorScheme === "dark" ? "dark" : "light"];
+  const s = getS(C);
+
   const insets = useSafeAreaInsets();
   const { settings, updateBedtime } = useSettings();
   const bt = settings.bedtime;
 
   const sleepHrs = sleepDurationHours(bt.startHour, bt.startMin, bt.endHour, bt.endMin);
-  const rating = getSleepRating(sleepHrs);
+  const rating = getSleepRating(sleepHrs, C);
 
   const update = (patch: Partial<BedtimeSettings>) => {
     Haptics.selectionAsync();
@@ -113,7 +119,7 @@ export default function BedtimeScreen() {
   ];
 
   return (
-    <LinearGradient colors={["#05050F", "#0A0818", "#05050F"]} style={{ flex: 1 }}>
+    <LinearGradient colors={[C.background, C.backgroundSecondary, C.background]} style={{ flex: 1 }}>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingTop: (Platform.OS === "web" ? 60 : insets.top) + 16, paddingBottom: insets.bottom + 110 }}
@@ -181,6 +187,7 @@ export default function BedtimeScreen() {
           <Text style={s.cardSection}>Bedtime Window</Text>
           <View style={s.wheelsRow}>
             <TimeWheel
+              C={C}
               label="Bedtime"
               hour={bt.startHour}
               minute={bt.startMin}
@@ -192,6 +199,7 @@ export default function BedtimeScreen() {
               <Text style={s.arrowLabel}>until</Text>
             </View>
             <TimeWheel
+              C={C}
               label="Wake up"
               hour={bt.endHour}
               minute={bt.endMin}
@@ -233,7 +241,7 @@ export default function BedtimeScreen() {
   );
 }
 
-const tw = StyleSheet.create({
+const getTw = (C: any) => StyleSheet.create({
   wrap: { alignItems: "center", gap: 6 },
   label: { fontSize: 12, fontFamily: "Inter_400Regular", color: C.textMuted, marginBottom: 2 },
   wheel: { flexDirection: "row", alignItems: "center", gap: 6 },
@@ -245,7 +253,7 @@ const tw = StyleSheet.create({
   period: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: C.textSecondary },
 });
 
-const s = StyleSheet.create({
+const getS = (C: any) => StyleSheet.create({
   header: { paddingHorizontal: 20, marginBottom: 16 },
   title: { fontSize: 28, fontFamily: "Inter_700Bold", color: C.text },
   subtitle: { fontSize: 14, fontFamily: "Inter_400Regular", color: C.textMuted, marginTop: 4 },

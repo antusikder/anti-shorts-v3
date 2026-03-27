@@ -87,6 +87,15 @@ class AntiShortsModule(reactContext: ReactApplicationContext) :
             if (settingsMap.hasKey("facebookAutoBack"))
                 putBoolean(AntiShortsService.PREF_FB_AUTO_BACK, settingsMap.getBoolean("facebookAutoBack"))
 
+            if (settingsMap.hasKey("igEnabled"))
+                putBoolean(AntiShortsService.PREF_IG_ENABLED, settingsMap.getBoolean("igEnabled"))
+            if (settingsMap.hasKey("ttEnabled"))
+                putBoolean(AntiShortsService.PREF_TT_ENABLED, settingsMap.getBoolean("ttEnabled"))
+            if (settingsMap.hasKey("skipAds"))
+                putBoolean(AntiShortsService.PREF_SKIP_ADS, settingsMap.getBoolean("skipAds"))
+            if (settingsMap.hasKey("systemEnabled"))
+                putBoolean(AntiShortsService.PREF_SYSTEM_ENABLED, settingsMap.getBoolean("systemEnabled"))
+
             if (settingsMap.hasKey("scanIntervalMs"))
                 putLong(AntiShortsService.PREF_SCAN_INTERVAL, settingsMap.getInt("scanIntervalMs").toLong())
 

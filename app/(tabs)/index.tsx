@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  useColorScheme,
   View,
   Switch,
   ActivityIndicator,
@@ -19,9 +20,8 @@ import Colors from "@/constants/colors";
 import { useSettings } from "@/context/SettingsContext";
 import { AccessibilityModule } from "@/modules/AccessibilityModule";
 
-const C = Colors.dark;
-
-function SectionHeader({ icon, title, subtitle }: { icon: React.ReactNode; title: string; subtitle?: string }) {
+function SectionHeader({ icon, title, subtitle, C }: { icon: React.ReactNode; title: string; subtitle?: string; C: any }) {
+  const sh = getSh(C);
   return (
     <View style={sh.sectionHeader}>
       <View style={sh.sectionHeaderLeft}>
@@ -42,6 +42,7 @@ function ToggleItem({
   onValueChange,
   icon,
   disabled,
+  C,
 }: {
   label: string;
   description?: string;
@@ -49,7 +50,9 @@ function ToggleItem({
   onValueChange: (v: boolean) => void;
   icon?: React.ReactNode;
   disabled?: boolean;
+  C: any;
 }) {
+  const ti = getTi(C);
   const handleToggle = (v: boolean) => {
     Haptics.selectionAsync();
     onValueChange(v);
@@ -73,13 +76,27 @@ function ToggleItem({
   );
 }
 
-function Card({ children, style }: { children: React.ReactNode; style?: object }) {
+function Card({ children, style, C }: { children: React.ReactNode; style?: object; C: any }) {
+  const card = getCard(C);
   return <View style={[card.container, style]}>{children}</View>;
 }
 
 export default function ShieldScreen() {
+  const colorScheme = useColorScheme();
+  const C = Colors[colorScheme === "dark" ? "dark" : "light"];
+  const styles = getStyles(C);
   const insets = useSafeAreaInsets();
-  const { settings, updateYoutube, updateFacebook, updateScanSpeed, setServiceEnabled } = useSettings();
+  const { 
+    settings, 
+    updateYoutube, 
+    updateFacebook, 
+    updateInstagram, 
+    updateTiktok, 
+    updateSkipAds, 
+    updateSystemEnabled,
+    updateScanSpeed, 
+    setServiceEnabled 
+  } = useSettings();
   const [isChecking, setIsChecking] = useState(true);
   const [isEnabled, setIsEnabled] = useState(false);
   const pulseAnim = React.useRef(new Animated.Value(1)).current;
@@ -123,13 +140,13 @@ export default function ShieldScreen() {
         <View style={styles.header}>
           <View style={styles.logoRow}>
             <MaterialCommunityIcons name="brain" size={30} color={C.tint} />
-            <Text style={styles.appTitle}>Productive</Text>
+            <Text style={styles.appTitle}>Fresh Mind</Text>
           </View>
           <Text style={styles.appSubtitle}>Digital Wellness Shield</Text>
         </View>
 
         {/* Service Status Card */}
-        <Card style={styles.statusCard}>
+        <Card C={C} style={styles.statusCard}>
           <View style={styles.statusTop}>
             <Text style={styles.cardLabel}>Protection Status</Text>
             {isChecking ? (
@@ -146,20 +163,46 @@ export default function ShieldScreen() {
 
           <View style={styles.shieldCenter}>
             <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-              <View style={[styles.shieldBg, { backgroundColor: isEnabled ? C.green + "22" : C.tint + "22" }]}>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  updateSystemEnabled(!settings.systemEnabled);
+                }}
+                style={[
+                  styles.shieldBg, 
+                  { 
+                    backgroundColor: isEnabled && settings.systemEnabled ? C.green + "22" : C.tint + "22",
+                    borderWidth: 2, 
+                    borderColor: isEnabled && settings.systemEnabled ? C.green : C.tintDark 
+                  }
+                ]}
+              >
                 <MaterialCommunityIcons
-                  name={isEnabled ? "shield-check" : "shield-off"}
+                  name={isEnabled && settings.systemEnabled ? "shield-check" : "shield-off"}
                   size={56}
-                  color={isEnabled ? C.green : C.tint}
+                  color={isEnabled && settings.systemEnabled ? C.green : C.tint}
                 />
-              </View>
+              </TouchableOpacity>
             </Animated.View>
+            <Text style={{ marginTop: 12, fontSize: 13, color: C.textSecondary, fontFamily: "Inter_500Medium" }}>
+              {isEnabled ? "Tap to Toggle Shield" : "Service Disabled"}
+            </Text>
           </View>
 
           {isEnabled ? (
             <View style={styles.statusMsg}>
-              <Text style={[styles.statusText, { color: C.green }]}>Shield is active</Text>
-              <Text style={styles.statusSub}>Shorts and Reels are being filtered automatically</Text>
+              {settings.systemEnabled ? (
+                <>
+                  <Text style={[styles.statusText, { color: C.green }]}>Shield is Active</Text>
+                  <Text style={styles.statusSub}>Monitoring your digital wellbeing natively</Text>
+                </>
+              ) : (
+                <>
+                  <Text style={[styles.statusText, { color: C.danger }]}>Shield is Paused</Text>
+                  <Text style={styles.statusSub}>Tap the shield above to resume protection</Text>
+                </>
+              )}
             </View>
           ) : (
             <View style={styles.statusMsg}>
@@ -199,13 +242,15 @@ export default function ShieldScreen() {
         </View>
 
         {/* YouTube Section */}
-        <Card>
+        <Card C={C}>
           <SectionHeader
+            C={C}
             icon={<MaterialCommunityIcons name="youtube" size={18} color={C.youtube} />}
             title="YouTube"
-            subtitle="Control YouTube Shorts removal"
+            subtitle="Control YouTube Shorts and Ads"
           />
           <ToggleItem
+            C={C}
             label="YouTube Protection"
             description="Master switch — enable/disable all YouTube filtering"
             value={settings.youtube.enabled}
@@ -214,20 +259,32 @@ export default function ShieldScreen() {
           />
           <View style={styles.divider} />
           <ToggleItem
-            label="Remove Shorts from Feed"
-            description="Detects Shorts shelf and dismisses it quietly"
-            value={settings.youtube.removeShorts}
-            onValueChange={(v) => updateYoutube("removeShorts", v)}
-            icon={<Feather name="skip-forward" size={18} color={C.tint} />}
+            C={C}
+            label="Auto-Skip Ads"
+            description="Automatically presses 'Skip ad' on video playback"
+            value={settings.skipAds}
+            onValueChange={updateSkipAds}
+            icon={<MaterialCommunityIcons name="gesture-tap" size={18} color={C.info} />}
             disabled={!settings.youtube.enabled}
           />
           <View style={styles.divider} />
           <ToggleItem
+            C={C}
+            label="Remove Shorts from Feed"
+            description="Detects Shorts shelf and dismisses it quietly"
+            value={settings.youtube.removeShorts}
+            onValueChange={(v) => updateYoutube("removeShorts", v)}
+            icon={<Feather name="list" size={18} color={C.tint} />}
+            disabled={!settings.youtube.enabled}
+          />
+          <View style={styles.divider} />
+          <ToggleItem
+            C={C}
             label="Auto-Back from Short"
             description="Instantly exits if a Short video opens"
             value={settings.youtube.autoBack}
             onValueChange={(v) => updateYoutube("autoBack", v)}
-            icon={<Feather name="arrow-left" size={18} color={C.amber} />}
+            icon={<Feather name="corner-up-left" size={18} color={C.amber} />}
             disabled={!settings.youtube.enabled}
           />
         </Card>
@@ -235,13 +292,15 @@ export default function ShieldScreen() {
         <View style={{ height: 12 }} />
 
         {/* Facebook Section */}
-        <Card>
+        <Card C={C}>
           <SectionHeader
+            C={C}
             icon={<Feather name="facebook" size={18} color={C.facebook} />}
             title="Facebook"
             subtitle="Control Facebook Reels removal"
           />
           <ToggleItem
+            C={C}
             label="Facebook Protection"
             description="Master switch — enable/disable all Facebook filtering"
             value={settings.facebook.enabled}
@@ -250,29 +309,61 @@ export default function ShieldScreen() {
           />
           <View style={styles.divider} />
           <ToggleItem
+            C={C}
             label="Remove Reels from Feed"
             description="Dismisses Reels shelf with 'See fewer Reels'"
             value={settings.facebook.removeReels}
             onValueChange={(v) => updateFacebook("removeReels", v)}
-            icon={<Feather name="skip-forward" size={18} color={C.tint} />}
+            icon={<Feather name="list" size={18} color={C.tint} />}
             disabled={!settings.facebook.enabled}
           />
           <View style={styles.divider} />
           <ToggleItem
+            C={C}
             label="Auto-Back from Reel"
             description="Exits if a Reel player opens"
             value={settings.facebook.autoBack}
             onValueChange={(v) => updateFacebook("autoBack", v)}
-            icon={<Feather name="arrow-left" size={18} color={C.amber} />}
+            icon={<Feather name="corner-up-left" size={18} color={C.amber} />}
             disabled={!settings.facebook.enabled}
           />
         </Card>
 
         <View style={{ height: 12 }} />
 
-        {/* Scan Speed */}
-        <Card>
+        {/* Instagram & TikTok Section */}
+        <Card C={C}>
           <SectionHeader
+            C={C}
+            icon={<MaterialCommunityIcons name="instagram" size={18} color={C.instagram} />}
+            title="Instagram & TikTok"
+            subtitle="Control universal Reels/Shorts apps"
+          />
+          <ToggleItem
+            C={C}
+            label="Block Instagram Reels"
+            description="Exits automatically when Reels are played"
+            value={settings.instagram.enabled}
+            onValueChange={updateInstagram}
+            icon={<MaterialCommunityIcons name="instagram" size={20} color={settings.instagram.enabled ? C.instagram : C.textMuted} />}
+          />
+          <View style={styles.divider} />
+          <ToggleItem
+            C={C}
+            label="Block TikTok"
+            description="TikTok is pure short-form. Blocks entire app."
+            value={settings.tiktok.enabled}
+            onValueChange={updateTiktok}
+            icon={<MaterialCommunityIcons name="music-note" size={20} color={settings.tiktok.enabled ? C.tiktok : C.textMuted} />}
+          />
+        </Card>
+
+        <View style={{ height: 12 }} />
+
+        {/* Scan Speed */}
+        <Card C={C}>
+          <SectionHeader
+            C={C}
             icon={<Feather name="activity" size={18} color={C.textSecondary} />}
             title="Scan Speed"
             subtitle="Balance between speed and battery"
@@ -310,7 +401,7 @@ export default function ShieldScreen() {
   );
 }
 
-const card = StyleSheet.create({
+const getCard = (C: any) => StyleSheet.create({
   container: {
     backgroundColor: C.backgroundCard,
     borderRadius: 20,
@@ -321,7 +412,7 @@ const card = StyleSheet.create({
   },
 });
 
-const sh = StyleSheet.create({
+const getSh = (C: any) => StyleSheet.create({
   sectionHeader: { marginBottom: 14 },
   sectionHeaderLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
   sectionIconWrap: {
@@ -336,7 +427,7 @@ const sh = StyleSheet.create({
   sectionSubtitle: { fontSize: 12, fontFamily: "Inter_400Regular", color: C.textMuted, marginTop: 1 },
 });
 
-const ti = StyleSheet.create({
+const getTi = (C: any) => StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 6 },
   iconWrap: {
     width: 34,
@@ -351,7 +442,7 @@ const ti = StyleSheet.create({
   desc: { fontSize: 12, fontFamily: "Inter_400Regular", color: C.textMuted, marginTop: 2 },
 });
 
-const styles = StyleSheet.create({
+const getStyles = (C: any) => StyleSheet.create({
   scroll: { gap: 0, paddingHorizontal: 0 },
   header: { paddingHorizontal: 20, paddingBottom: 20 },
   logoRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 4 },
@@ -364,7 +455,7 @@ const styles = StyleSheet.create({
   dot: { width: 6, height: 6, borderRadius: 3 },
   badgeText: { fontSize: 11, fontFamily: "Inter_700Bold", letterSpacing: 0.5 },
   shieldCenter: { alignItems: "center", marginBottom: 16 },
-  shieldBg: { width: 96, height: 96, borderRadius: 48, alignItems: "center", justifyContent: "center" },
+  shieldBg: { width: 106, height: 106, borderRadius: 53, alignItems: "center", justifyContent: "center" },
   statusMsg: { alignItems: "center", gap: 6 },
   statusText: { fontSize: 15, fontFamily: "Inter_600SemiBold", color: C.text },
   statusSub: { fontSize: 13, fontFamily: "Inter_400Regular", color: C.textMuted, textAlign: "center" },
