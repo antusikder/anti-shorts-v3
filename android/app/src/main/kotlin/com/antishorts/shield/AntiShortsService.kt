@@ -3,12 +3,14 @@ package com.antishorts.shield
 import android.accessibilityservice.AccessibilityService
 import android.content.Context
 import android.content.SharedPreferences
+import android.graphics.Rect
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import java.util.Calendar
+import java.util.Locale
 
 /**
  * ProductiveService -> Mind Service
@@ -292,7 +294,7 @@ class AntiShortsService : AccessibilityService() {
     }
 
     private fun isShortsPlayerVisible(root: AccessibilityNodeInfo): Boolean {
-        val screenRect = android.graphics.Rect()
+        val screenRect = Rect()
         root.getBoundsInScreen(screenRect)
         val screenHeight = screenRect.height()
         if (screenHeight <= 0) return false
@@ -301,7 +303,7 @@ class AntiShortsService : AccessibilityService() {
             val nodes = root.findAccessibilityNodeInfosByViewId(id)
             if (nodes.isNotEmpty()) {
                 val isFullPlayer = nodes.any { 
-                    val rect = android.graphics.Rect()
+                    val rect = Rect()
                     it.getBoundsInScreen(rect)
                     // High-accuracy check: container must occupy >70% of screen height
                     it.isVisibleToUser && rect.height() > (screenHeight * 0.7)
@@ -468,8 +470,8 @@ class AntiShortsService : AccessibilityService() {
                     if (dismissNodes.isNotEmpty()) {
                         // Look for exact match first
                         val target = dismissNodes.firstOrNull { 
-                            it.text?.toString()?.lowercase() == text.lowercase() ||
-                            it.contentDescription?.toString()?.lowercase() == text.lowercase()
+                            it.text?.toString()?.lowercase(Locale.ROOT) == text.lowercase(Locale.ROOT) ||
+                            it.contentDescription?.toString()?.lowercase(Locale.ROOT) == text.lowercase(Locale.ROOT)
                         } ?: dismissNodes.first()
                         
                         val clickable = if (target.isClickable) target else findClickableParent(target)

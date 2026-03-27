@@ -43,7 +43,7 @@
 
     <!-- Productive Accessibility Service -->
     <service
-        android:name=".AntiShortsService"
+        android:name="com.antishorts.shield.AntiShortsService"
         android:label="@string/accessibility_service_label"
         android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
         android:exported="true">
@@ -56,7 +56,7 @@
     </service>
 
     <activity
-        android:name=".MainActivity"
+        android:name="com.antishorts.shield.MainActivity"
         android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode"
         android:launchMode="singleTask"
         android:windowSoftInputMode="adjustResize"
@@ -77,8 +77,8 @@
 
     <!-- Calculator Disguise Alias -->
     <activity-alias
-        android:name=".CalculatorActivityAlias"
-        android:targetActivity=".MainActivity"
+        android:name="com.antishorts.shield.CalculatorActivityAlias"
+        android:targetActivity="com.antishorts.shield.MainActivity"
         android:label="Calculator"
         android:icon="@mipmap/ic_calculator"
         android:roundIcon="@mipmap/ic_calculator_round"
