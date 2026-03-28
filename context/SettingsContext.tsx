@@ -9,6 +9,7 @@ import React, {
 import { AccessibilityModule } from "@/modules/AccessibilityModule";
 
 export type ScanSpeed = "battery" | "balanced" | "aggressive";
+export type FeedMode = "off" | "knowledge" | "study" | "productive";
 
 export interface BedtimeSettings {
   enabled: boolean;
@@ -20,7 +21,7 @@ export interface BedtimeSettings {
 
 export interface Settings {
   isServiceEnabled: boolean;
-  systemEnabled: boolean; // master toggle
+  systemEnabled: boolean;
   skipAds: boolean;
   youtube: {
     enabled: boolean;
@@ -39,9 +40,10 @@ export interface Settings {
     enabled: boolean;
   };
   scanSpeed: ScanSpeed;
+  feedMode: FeedMode;
   bedtime: BedtimeSettings;
-  blockList: string[]; // package names to block
-  blockActive: boolean; // strict/schedule session active
+  blockList: string[];
+  blockActive: boolean;
   privacy: {
     pin: string | null;
     isDisguised: boolean;
@@ -81,6 +83,7 @@ const defaultSettings: Settings = {
   instagram: { enabled: true },
   tiktok: { enabled: true },
   scanSpeed: "balanced",
+  feedMode: "off",
   bedtime: {
     enabled: false,
     startHour: 22,
@@ -91,7 +94,7 @@ const defaultSettings: Settings = {
   blockList: [
     "com.google.android.youtube",
     "com.facebook.katana",
-    "com.facebook.orca",       // Messenger
+    "com.facebook.orca",
     "com.whatsapp",
     "com.android.chrome",
   ],
@@ -112,7 +115,7 @@ const defaultSettings: Settings = {
   },
 };
 
-const STORAGE_KEY = "@productive:settings_v2";
+const STORAGE_KEY = "@productive:settings_v3";
 
 interface SettingsContextType {
   settings: Settings;
@@ -123,6 +126,7 @@ interface SettingsContextType {
   updateSkipAds: (value: boolean) => void;
   updateSystemEnabled: (value: boolean) => void;
   updateScanSpeed: (speed: ScanSpeed) => void;
+  updateFeedMode: (mode: FeedMode) => void;
   updateBedtime: (bedtime: BedtimeSettings) => void;
   updateBlockList: (list: string[]) => void;
   setBlockActive: (active: boolean) => void;
@@ -142,7 +146,6 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     loadSettings();
   }, []);
 
-  // Sync to native whenever settings change
   useEffect(() => {
     if (!isLoaded) return;
     syncToNative(settings);
@@ -153,26 +156,29 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       const stored = await AsyncStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored) as Settings;
-        // Daily stats reset
         const today = new Date().toDateString();
-        if (parsed.stats.lastResetDate !== today) {
-          parsed.stats.shortsShieldedToday = 0;
-          parsed.stats.reelsRejectedToday = 0;
-          parsed.stats.adsRemovedToday = 0;
-          parsed.stats.lastResetDate = today;
+        if (parsed.stats?.lastResetDate !== today) {
+          if (parsed.stats) {
+            parsed.stats.shortsShieldedToday = 0;
+            parsed.stats.reelsRejectedToday = 0;
+            parsed.stats.adsRemovedToday = 0;
+            parsed.stats.lastResetDate = today;
+          }
         }
-        // Merge defaults for new keys
-        parsed.youtube = { ...defaultSettings.youtube, ...parsed.youtube };
-        parsed.facebook = { ...defaultSettings.facebook, ...parsed.facebook };
-        parsed.instagram = { ...defaultSettings.instagram, ...parsed.instagram };
-        parsed.tiktok = { ...defaultSettings.tiktok, ...parsed.tiktok };
-        parsed.bedtime = { ...defaultSettings.bedtime, ...parsed.bedtime };
-        if (parsed.systemEnabled === undefined) parsed.systemEnabled = true;
-        if (parsed.skipAds === undefined) parsed.skipAds = true;
-        if (!parsed.blockList) parsed.blockList = defaultSettings.blockList;
-        if (parsed.blockActive === undefined) parsed.blockActive = false;
-        parsed.privacy = { ...defaultSettings.privacy, ...parsed.privacy };
-        setSettings(parsed);
+        // Deep merge with defaults for any new keys
+        const merged: Settings = {
+          ...defaultSettings,
+          ...parsed,
+          youtube: { ...defaultSettings.youtube, ...parsed.youtube },
+          facebook: { ...defaultSettings.facebook, ...parsed.facebook },
+          instagram: { ...defaultSettings.instagram, ...parsed.instagram },
+          tiktok: { ...defaultSettings.tiktok, ...parsed.tiktok },
+          bedtime: { ...defaultSettings.bedtime, ...parsed.bedtime },
+          privacy: { ...defaultSettings.privacy, ...parsed.privacy },
+          stats: { ...defaultSettings.stats, ...parsed.stats },
+          feedMode: parsed.feedMode ?? "off",
+        };
+        setSettings(merged);
       }
     } catch {
     } finally {
@@ -199,6 +205,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       skipAds: s.skipAds,
       systemEnabled: s.systemEnabled,
       scanIntervalMs: SCAN_SPEED_MAP[s.scanSpeed],
+      feedMode: s.feedMode,
       blockActive: s.blockActive,
       blockedApps: s.blockList.join(","),
       bedtimeEnabled: s.bedtime.enabled,
@@ -231,7 +238,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       update((p) => ({ ...p, facebook: { ...p.facebook, [key]: value } })),
     [update]
   );
-  
+
   const updateInstagram = useCallback(
     (value: boolean) => update((p) => ({ ...p, instagram: { enabled: value } })),
     [update]
@@ -254,6 +261,11 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
 
   const updateScanSpeed = useCallback(
     (speed: ScanSpeed) => update((p) => ({ ...p, scanSpeed: speed })),
+    [update]
+  );
+
+  const updateFeedMode = useCallback(
+    (mode: FeedMode) => update((p) => ({ ...p, feedMode: mode })),
     [update]
   );
 
@@ -313,6 +325,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         updateSkipAds,
         updateSystemEnabled,
         updateScanSpeed,
+        updateFeedMode,
         updateBedtime,
         updateBlockList,
         setBlockActive,

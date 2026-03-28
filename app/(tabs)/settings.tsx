@@ -276,14 +276,20 @@ export default function SettingsScreen() {
             <Feather name="info" size={18} color={C.textSecondary} />
             <Text style={s.cardTitle}>About Fresh Mind</Text>
           </View>
-          <Text style={s.aboutText}>Version 3.1.2</Text>
+          <Text style={s.aboutText}>Version 3.0.0</Text>
           <Text style={s.aboutText}>Accessibility Service: {settings.isServiceEnabled ? "Active" : "Inactive"}</Text>
           
           <View style={s.creditsBox}>
-             <Text style={s.creditHeader}>Creator & Developer:</Text>
+             <Text style={s.creditHeader}>Creator &amp; Developer</Text>
              <Text style={s.creditText}>Alman Sikder</Text>
-             <Text style={s.creditSub}>Alman studies Meteorology at University of Dhaka</Text>
-             <Text style={{...s.creditSub, marginTop: 12}}>Copyright © {new Date().getFullYear()}</Text>
+             <Text style={s.creditSub}>Studying Meteorology · University of Dhaka</Text>
+             <View style={{ height: 1, backgroundColor: '#ffffff14', marginVertical: 10 }} />
+             <Text style={s.creditHeader}>AI Engineering</Text>
+             <Text style={s.creditText}>Antigravity</Text>
+             <Text style={s.creditSub}>Advanced Agentic AI by Google DeepMind</Text>
+             <Text style={{...s.creditSub, marginTop: 14, opacity: 0.7}}>
+               Copyright © {new Date().getFullYear()} Alman Sikder · All rights reserved
+             </Text>
           </View>
         </View>
       </ScrollView>

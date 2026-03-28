@@ -16,10 +16,15 @@ import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.bridge.WritableArray
 
 /**
- * ProductiveModule (native bridge)
+ * AntiShortsModule — Native bridge to JavaScript (NativeModules.AntiShortsModule)
  *
- * Exposed to JavaScript as NativeModules.AntiShortsModule
- * All settings are written to SharedPreferences. The service reads them fresh per cycle.
+ * All settings are written to SharedPreferences; the service reads them live per cycle.
+ * Keys accepted by updateSettings:
+ *   ytEnabled, youtubeRemoveShorts, youtubeAutoBack,
+ *   fbEnabled, facebookRemoveReels, facebookAutoBack,
+ *   igEnabled, ttEnabled, skipAds, systemEnabled, feedMode,
+ *   scanIntervalMs, blockActive, blockedApps,
+ *   bedtimeEnabled, bedtimeStartHour, bedtimeStartMin, bedtimeEndHour, bedtimeEndMin
  */
 class AntiShortsModule(reactContext: ReactApplicationContext) :
     ReactContextBaseJavaModule(reactContext) {
@@ -37,16 +42,15 @@ class AntiShortsModule(reactContext: ReactApplicationContext) :
             val am = reactApplicationContext
                 .getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
             val enabled = am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
-            val serviceName = "${reactApplicationContext.packageName}/${AntiShortsService::class.java.name}"
             val settingStr = Settings.Secure.getString(
                 reactApplicationContext.contentResolver,
                 Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
             ) ?: ""
+            val pkgName = reactApplicationContext.packageName
             val isEnabled = enabled.any { info ->
                 val si = info.resolveInfo.serviceInfo
-                "${si.packageName}/${si.name}" == serviceName ||
-                    si.packageName == reactApplicationContext.packageName
-            } || settingStr.contains(reactApplicationContext.packageName)
+                si.packageName == pkgName
+            } || settingStr.contains(pkgName)
             promise.resolve(isEnabled)
         } catch (e: Exception) {
             promise.resolve(false)
@@ -61,18 +65,10 @@ class AntiShortsModule(reactContext: ReactApplicationContext) :
         reactApplicationContext.startActivity(intent)
     }
 
-    /**
-     * Updates all service settings from React Native UI.
-     * Keys accepted:
-     *   ytEnabled, youtubeRemoveShorts, youtubeAutoBack,
-     *   fbEnabled, facebookRemoveReels, facebookAutoBack,
-     *   scanIntervalMs,
-     *   blockActive, blockedApps (comma-separated string),
-     *   bedtimeEnabled, bedtimeStartHour, bedtimeStartMin, bedtimeEndHour, bedtimeEndMin
-     */
     @ReactMethod
     fun updateSettings(settingsMap: ReadableMap) {
         prefs.edit().apply {
+            // YouTube
             if (settingsMap.hasKey("ytEnabled"))
                 putBoolean(AntiShortsService.PREF_YT_ENABLED, settingsMap.getBoolean("ytEnabled"))
             if (settingsMap.hasKey("youtubeRemoveShorts"))
@@ -80,6 +76,7 @@ class AntiShortsModule(reactContext: ReactApplicationContext) :
             if (settingsMap.hasKey("youtubeAutoBack"))
                 putBoolean(AntiShortsService.PREF_YT_AUTO_BACK, settingsMap.getBoolean("youtubeAutoBack"))
 
+            // Facebook
             if (settingsMap.hasKey("fbEnabled"))
                 putBoolean(AntiShortsService.PREF_FB_ENABLED, settingsMap.getBoolean("fbEnabled"))
             if (settingsMap.hasKey("facebookRemoveReels"))
@@ -87,19 +84,27 @@ class AntiShortsModule(reactContext: ReactApplicationContext) :
             if (settingsMap.hasKey("facebookAutoBack"))
                 putBoolean(AntiShortsService.PREF_FB_AUTO_BACK, settingsMap.getBoolean("facebookAutoBack"))
 
+            // Instagram & TikTok
             if (settingsMap.hasKey("igEnabled"))
                 putBoolean(AntiShortsService.PREF_IG_ENABLED, settingsMap.getBoolean("igEnabled"))
             if (settingsMap.hasKey("ttEnabled"))
                 putBoolean(AntiShortsService.PREF_TT_ENABLED, settingsMap.getBoolean("ttEnabled"))
+
+            // Ads & System
             if (settingsMap.hasKey("skipAds"))
                 putBoolean(AntiShortsService.PREF_SKIP_ADS, settingsMap.getBoolean("skipAds"))
             if (settingsMap.hasKey("systemEnabled"))
                 putBoolean(AntiShortsService.PREF_SYSTEM_ENABLED, settingsMap.getBoolean("systemEnabled"))
 
+            // Feed mode ("off" | "knowledge" | "study" | "productive")
+            if (settingsMap.hasKey("feedMode"))
+                putString(AntiShortsService.PREF_FEED_MODE, settingsMap.getString("feedMode"))
+
+            // Scan speed
             if (settingsMap.hasKey("scanIntervalMs"))
                 putLong(AntiShortsService.PREF_SCAN_INTERVAL, settingsMap.getInt("scanIntervalMs").toLong())
 
-            // Block / strict
+            // Block / strict mode
             if (settingsMap.hasKey("blockActive"))
                 putBoolean(AntiShortsService.PREF_BLOCK_ACTIVE, settingsMap.getBoolean("blockActive"))
             if (settingsMap.hasKey("blockedApps"))
@@ -119,10 +124,6 @@ class AntiShortsModule(reactContext: ReactApplicationContext) :
         }.apply()
     }
 
-    /**
-     * Returns a list of all launchable user-installed apps.
-     * Each item: { name: string, pkg: string }
-     */
     @ReactMethod
     fun getInstalledApps(promise: Promise) {
         try {
@@ -132,11 +133,10 @@ class AntiShortsModule(reactContext: ReactApplicationContext) :
             }
             val apps: WritableArray = Arguments.createArray()
             val ownPkg = reactApplicationContext.packageName
-
             val resolveInfos = pm.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
             for (ri in resolveInfos) {
                 val pkg = ri.activityInfo.packageName
-                if (pkg == ownPkg) continue // skip self
+                if (pkg == ownPkg) continue
                 val label = ri.loadLabel(pm).toString()
                 val map = Arguments.createMap()
                 map.putString("name", label)
@@ -145,7 +145,7 @@ class AntiShortsModule(reactContext: ReactApplicationContext) :
             }
             promise.resolve(apps)
         } catch (e: Exception) {
-            promise.reject("ERR", e.message)
+            promise.reject("ERR_GET_APPS", e.message)
         }
     }
 }

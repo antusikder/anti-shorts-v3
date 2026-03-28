@@ -6,15 +6,29 @@ import {
   TouchableOpacity,
   View,
   Dimensions,
-  Platform,
+  StatusBar,
 } from "react-native";
 import * as Haptics from "expo-haptics";
 
-const { width } = Dimensions.get("window");
-const btnSize = (width - 60) / 4;
+const { width, height } = Dimensions.get("window");
+const COLS = 4;
+const BTN_SIZE = Math.floor((width - 48) / COLS);
 
-export default function CalculatorDecoy({ onUnlock, correctPin, C }: { 
-  onUnlock: () => void; 
+// iOS Calculator exact palette (dark mode)
+const IOS = {
+  bg: "#000000",
+  display: "#000000",
+  numBg: "#333333",
+  opBg: "#FF9F0A",   // iOS orange
+  funcBg: "#A5A5A5", // AC / ± / %
+  text: "#FFFFFF",
+  opText: "#FFFFFF",
+  funcText: "#000000",
+  historyText: "#8E8E93",
+};
+
+export default function CalculatorDecoy({ onUnlock, correctPin, C }: {
+  onUnlock: () => void;
   correctPin: string | null;
   C: any;
 }) {
@@ -24,14 +38,12 @@ export default function CalculatorDecoy({ onUnlock, correctPin, C }: {
   const [prevVal, setPrevVal] = useState<number | null>(null);
   const [waitingForOperand, setWaitingForOperand] = useState(false);
 
-  const styles = getStyles(C);
-
   const handleDigit = (digit: string) => {
     Haptics.selectionAsync();
     if (waitingForOperand || display === "0") {
       setDisplay(digit);
       setWaitingForOperand(false);
-    } else {
+    } else if (display.length < 12) {
       setDisplay(display + digit);
     }
   };
@@ -42,35 +54,46 @@ export default function CalculatorDecoy({ onUnlock, correctPin, C }: {
     setHistory("");
     setPrevVal(null);
     setLastOp(null);
+    setWaitingForOperand(false);
+  };
+
+  const handleNegate = () => {
+    Haptics.selectionAsync();
+    const v = parseFloat(display);
+    setDisplay(String(-v));
+  };
+
+  const handlePercent = () => {
+    Haptics.selectionAsync();
+    const v = parseFloat(display);
+    setDisplay(String(v / 100));
   };
 
   const handleOp = (op: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const val = parseFloat(display);
-    
     if (prevVal === null) {
       setPrevVal(val);
     } else if (lastOp) {
       const result = performCalc(prevVal, val, lastOp);
       setPrevVal(result);
-      setDisplay(String(result));
+      setDisplay(formatNum(result));
     }
-    
     setLastOp(op);
-    setHistory(`${display.substring(0, 10)} ${op}`);
+    setHistory(`${display.slice(0, 10)} ${op}`);
     setWaitingForOperand(true);
   };
 
-  const formatDisplay = (num: number) => {
+  const formatNum = (num: number): string => {
     const s = String(num);
-    if (s.length > 12) return num.toPrecision(8);
+    if (s.length > 12) return parseFloat(num.toPrecision(9)).toString();
     return s;
   };
 
-  const performCalc = (a: number, b: number, op: string) => {
+  const performCalc = (a: number, b: number, op: string): number => {
     switch (op) {
       case "+": return a + b;
-      case "-": return a - b;
+      case "−": return a - b;
       case "×": return a * b;
       case "÷": return b !== 0 ? a / b : 0;
       default: return b;
@@ -79,9 +102,9 @@ export default function CalculatorDecoy({ onUnlock, correctPin, C }: {
 
   const handleEqual = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    
-    // SECRET UNLOCK CHECK
-    if (display === correctPin && correctPin !== null) {
+
+    // SECRET: if display equals the PIN, unlock the app
+    if (correctPin && display === correctPin) {
       onUnlock();
       return;
     }
@@ -90,39 +113,54 @@ export default function CalculatorDecoy({ onUnlock, correctPin, C }: {
     if (prevVal !== null && lastOp) {
       const result = performCalc(prevVal, val, lastOp);
       setHistory("");
-      setDisplay(formatDisplay(result));
+      setDisplay(formatNum(result));
       setPrevVal(null);
       setLastOp(null);
       setWaitingForOperand(true);
     }
   };
 
-  const CalcButton = ({ label, type = "digit", onPress }: { 
-    label: string | React.ReactNode; 
-    type?: "op" | "digit" | "clear" | "equal"; 
-    onPress: () => void 
+  const handleDot = () => {
+    Haptics.selectionAsync();
+    if (!display.includes(".")) {
+      setDisplay(display + ".");
+    }
+  };
+
+  type BtnType = "digit" | "op" | "func" | "equal";
+
+  const CalcBtn = ({
+    label, type = "digit", onPress, wide
+  }: {
+    label: string | React.ReactNode; type?: BtnType; onPress: () => void; wide?: boolean;
   }) => {
-    let bg = C.backgroundElevated;
-    let textC = C.text;
-    if (type === "op") { bg = C.tint + "22"; textC = C.tint; }
-    if (type === "equal") { bg = C.tint; textC = "#fff"; }
-    if (type === "clear") { bg = C.danger + "22"; textC = C.danger; }
+    let bg = IOS.numBg;
+    let textC = IOS.text;
+    if (type === "op" || type === "equal") { bg = IOS.opBg; textC = IOS.opText; }
+    if (type === "func") { bg = IOS.funcBg; textC = IOS.funcText; }
 
     return (
-      <TouchableOpacity 
-        style={[styles.btn, { backgroundColor: bg }]} 
+      <TouchableOpacity
         onPress={onPress}
-        activeOpacity={0.7}
+        activeOpacity={0.75}
+        style={[
+          styles.btn,
+          { backgroundColor: bg, width: wide ? BTN_SIZE * 2 + 12 : BTN_SIZE },
+        ]}
       >
-        {typeof label === "string" ? (
-          <Text style={[styles.btnText, { color: textC }]}>{label}</Text>
-        ) : label}
+        {typeof label === "string"
+          ? <Text style={[styles.btnText, { color: textC }]}>{label}</Text>
+          : label
+        }
       </TouchableOpacity>
     );
   };
 
   return (
     <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#000" />
+
+      {/* Display */}
       <View style={styles.displayArea}>
         <Text style={styles.historyText}>{history}</Text>
         <Text style={styles.displayText} numberOfLines={1} adjustsFontSizeToFit>
@@ -130,73 +168,69 @@ export default function CalculatorDecoy({ onUnlock, correctPin, C }: {
         </Text>
       </View>
 
+      {/* Buttons */}
       <View style={styles.grid}>
         <View style={styles.row}>
-          <CalcButton label="AC" type="clear" onPress={handleClear} />
-          <CalcButton label="±" type="op" onPress={() => setDisplay(String(-parseFloat(display)))} />
-          <CalcButton label="%" type="op" onPress={() => setDisplay(String(parseFloat(display) / 100))} />
-          <CalcButton label="÷" type="op" onPress={() => handleOp("÷")} />
+          <CalcBtn label="AC" type="func" onPress={handleClear} />
+          <CalcBtn label="±" type="func" onPress={handleNegate} />
+          <CalcBtn label="%" type="func" onPress={handlePercent} />
+          <CalcBtn label="÷" type="op" onPress={() => handleOp("÷")} />
         </View>
         <View style={styles.row}>
-          <CalcButton label="7" onPress={() => handleDigit("7")} />
-          <CalcButton label="8" onPress={() => handleDigit("8")} />
-          <CalcButton label="9" onPress={() => handleDigit("9")} />
-          <CalcButton label="×" type="op" onPress={() => handleOp("×")} />
+          <CalcBtn label="7" onPress={() => handleDigit("7")} />
+          <CalcBtn label="8" onPress={() => handleDigit("8")} />
+          <CalcBtn label="9" onPress={() => handleDigit("9")} />
+          <CalcBtn label="×" type="op" onPress={() => handleOp("×")} />
         </View>
         <View style={styles.row}>
-          <CalcButton label="4" onPress={() => handleDigit("4")} />
-          <CalcButton label="5" onPress={() => handleDigit("5")} />
-          <CalcButton label="6" onPress={() => handleDigit("6")} />
-          <CalcButton label="-" type="op" onPress={() => handleOp("-")} />
+          <CalcBtn label="4" onPress={() => handleDigit("4")} />
+          <CalcBtn label="5" onPress={() => handleDigit("5")} />
+          <CalcBtn label="6" onPress={() => handleDigit("6")} />
+          <CalcBtn label="−" type="op" onPress={() => handleOp("−")} />
         </View>
         <View style={styles.row}>
-          <CalcButton label="1" onPress={() => handleDigit("1")} />
-          <CalcButton label="2" onPress={() => handleDigit("2")} />
-          <CalcButton label="3" onPress={() => handleDigit("3")} />
-          <CalcButton label="+" type="op" onPress={() => handleOp("+")} />
+          <CalcBtn label="1" onPress={() => handleDigit("1")} />
+          <CalcBtn label="2" onPress={() => handleDigit("2")} />
+          <CalcBtn label="3" onPress={() => handleDigit("3")} />
+          <CalcBtn label="+" type="op" onPress={() => handleOp("+")} />
         </View>
         <View style={styles.row}>
-          <View style={{ flexDirection: 'row', gap: 12, flex: 2 }}>
-            <TouchableOpacity 
-              style={[styles.btn, { backgroundColor: C.backgroundElevated, flex: 1, borderRadius: btnSize / 2 }]} 
-              onPress={() => handleDigit("0")}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.btnText, { color: C.text, textAlign: 'left', paddingLeft: 30, width: '100%' }]}>0</Text>
-            </TouchableOpacity>
-          </View>
-          <CalcButton label="." onPress={() => handleDigit(".")} />
-          <CalcButton label="=" type="equal" onPress={handleEqual} />
+          <CalcBtn label="0" onPress={() => handleDigit("0")} wide />
+          <CalcBtn label="." onPress={handleDot} />
+          <CalcBtn label="=" type="equal" onPress={handleEqual} />
         </View>
       </View>
     </View>
   );
 }
 
-const getStyles = (C: any) => StyleSheet.create({
+const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: C.background,
+    backgroundColor: IOS.bg,
     justifyContent: "flex-end",
-    paddingBottom: Platform.OS === "ios" ? 40 : 20,
+    paddingBottom: 34,
   },
   displayArea: {
-    paddingHorizontal: 30,
+    paddingHorizontal: 24,
     alignItems: "flex-end",
-    marginBottom: 30,
+    marginBottom: 20,
+    paddingTop: 60,
   },
   historyText: {
-    fontSize: 20,
-    color: C.textMuted,
+    fontSize: 22,
+    color: IOS.historyText,
     fontFamily: "Inter_400Regular",
+    marginBottom: 4,
   },
   displayText: {
-    fontSize: 70,
-    color: C.text,
-    fontFamily: "Inter_600SemiBold",
+    fontSize: 80,
+    color: IOS.text,
+    fontFamily: "Inter_400Regular",
+    letterSpacing: -2,
   },
   grid: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 12,
     gap: 12,
   },
   row: {
@@ -205,14 +239,13 @@ const getStyles = (C: any) => StyleSheet.create({
     gap: 12,
   },
   btn: {
-    width: btnSize,
-    height: btnSize,
-    borderRadius: btnSize / 2,
+    height: BTN_SIZE,
+    borderRadius: BTN_SIZE / 2,
     alignItems: "center",
     justifyContent: "center",
   },
   btnText: {
-    fontSize: 26,
-    fontFamily: "Inter_600SemiBold",
+    fontSize: 30,
+    fontFamily: "Inter_400Regular",
   },
 });

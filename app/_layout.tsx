@@ -10,21 +10,19 @@ import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { useColorScheme } from "react-native";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { SettingsProvider } from "@/context/SettingsContext";
 import { PlannerProvider } from "@/context/PlannerContext";
+import { useSettings } from "@/context/SettingsContext";
+import Colors from "@/constants/colors";
+import CalculatorDecoy from "@/components/CalculatorDecoy";
 
 SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
-
-import { useSettings } from "@/context/SettingsContext";
-import Colors from "@/constants/colors";
-import { useColorScheme } from "react-native";
-import CalculatorDecoy from "@/components/CalculatorDecoy";
 
 function RootLayoutNav() {
   const { settings, isLoaded } = useSettings();
@@ -34,14 +32,17 @@ function RootLayoutNav() {
 
   if (!isLoaded) return null;
 
-  const showLock = settings.privacy.pin && !isUnlocked;
-  
+  // Show calculator if PIN is set AND disguise mode is on AND not yet unlocked
+  const showLock = settings.privacy.pin && settings.privacy.isDisguised && !isUnlocked;
+
   if (showLock) {
-    return <CalculatorDecoy 
-      correctPin={settings.privacy.pin} 
-      C={C} 
-      onUnlock={() => setIsUnlocked(true)} 
-    />;
+    return (
+      <CalculatorDecoy
+        correctPin={settings.privacy.pin}
+        C={C}
+        onUnlock={() => setIsUnlocked(true)}
+      />
+    );
   }
 
   return (
@@ -73,10 +74,8 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <SettingsProvider>
             <PlannerProvider>
-              <GestureHandlerRootView>
-                <KeyboardProvider>
-                  <RootLayoutNav />
-                </KeyboardProvider>
+              <GestureHandlerRootView style={{ flex: 1 }}>
+                <RootLayoutNav />
               </GestureHandlerRootView>
             </PlannerProvider>
           </SettingsProvider>
