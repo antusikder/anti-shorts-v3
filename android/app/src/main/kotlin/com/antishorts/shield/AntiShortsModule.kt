@@ -121,6 +121,8 @@ class AntiShortsModule(reactContext: ReactApplicationContext) :
                 putInt(AntiShortsService.PREF_BEDTIME_END_H, settingsMap.getInt("bedtimeEndHour"))
             if (settingsMap.hasKey("bedtimeEndMin"))
                 putInt(AntiShortsService.PREF_BEDTIME_END_M, settingsMap.getInt("bedtimeEndMin"))
+            if (settingsMap.hasKey("ytSubsOnly"))
+                putBoolean(AntiShortsService.PREF_YT_SUBS_ONLY, settingsMap.getBoolean("ytSubsOnly"))
         }.apply()
     }
 

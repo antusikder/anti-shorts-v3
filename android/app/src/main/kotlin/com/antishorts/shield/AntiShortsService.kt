@@ -45,6 +45,7 @@ class AntiShortsService : AccessibilityService() {
         const val PREF_SYSTEM_ENABLED   = "system_enabled"
         const val PREF_SCAN_INTERVAL    = "scan_interval_ms"
         const val PREF_FEED_MODE        = "feed_mode"   // "off"|"knowledge"|"study"|"productive"
+        const val PREF_YT_SUBS_ONLY     = "yt_subs_only"
 
         // Block / strict mode
         const val PREF_BLOCK_ACTIVE     = "block_active"
@@ -97,6 +98,13 @@ class AntiShortsService : AccessibilityService() {
             "Short videos"
         )
 
+        // View IDs for Shorts shelf and items (consistent across versions)
+        val YT_SHORTS_SHELF_IDS = listOf(
+            "com.google.android.youtube:id/shorts_shelf_container",
+            "com.google.android.youtube:id/reel_shelf_container",
+            "com.google.android.youtube:id/items_container"
+        )
+
         // Text shown ONLY in Shorts shelf 3-dot menu (1-2 items). NOT in general video menus.
         val YT_FEWER_SHORTS_TEXT = listOf(
             "Don't recommend Shorts",
@@ -104,7 +112,8 @@ class AntiShortsService : AccessibilityService() {
             "Show fewer Shorts",
             "Hide Shorts Shelf",
             "Not interested in Shorts",
-            "Stop recommending Shorts"
+            "Stop recommending Shorts",
+            "Not interested"
         )
 
         val FB_REELS_TEXT = listOf(
@@ -137,6 +146,13 @@ class AntiShortsService : AccessibilityService() {
         val AD_DISMISS_TEXTS = listOf(
             "Dismiss", "Hide ad", "Stop seeing this ad",
             "Not interested", "Report ad", "Close"
+        )
+
+        val STICKY_AD_IDS = listOf(
+            "com.google.android.youtube:id/close_button",
+            "com.google.android.youtube:id/dismiss_button",
+            "com.google.android.youtube:id/skip_ad_button_compact",
+            "com.google.android.youtube:id/ad_close_button"
         )
 
         val MENU_BUTTON_KEYWORDS = setOf("more", "option", "menu", "overflow")
@@ -273,14 +289,26 @@ class AntiShortsService : AccessibilityService() {
             return // Don't process feed ops when in Shorts player
         }
 
-        // Priority 3: Dismiss post-ad floating overlay link
+        // Priority 3: Dismiss post-ad floating overlay link or sticky banner
         if (prefs.getBoolean(PREF_SKIP_ADS, true)) {
             dismissAdOverlay(root)
+            dismissStickyAd(root)
         }
 
         // Priority 4: Remove Shorts shelf from feed
         if (prefs.getBoolean(PREF_YT_SHORTS, true)) {
             handleYtShortsInFeed(root)
+        }
+
+        // Priority 5: Subscribed Only Nudge
+        if (prefs.getBoolean(PREF_YT_SUBS_ONLY, false)) {
+            handleYtSubsOnly(root)
+        }
+
+        // Priority 6: Algorithmic Nudge (Like long-form content)
+        val feedMode = prefs.getString(PREF_FEED_MODE, "off")
+        if (feedMode != "off") {
+            handleAlgorithmicNudge(root)
         }
     }
 
@@ -346,6 +374,26 @@ class AntiShortsService : AccessibilityService() {
         }
     }
 
+    /** Dismiss "sticky" ad banners that remain after skip */
+    private fun dismissStickyAd(root: AccessibilityNodeInfo) {
+        for (id in STICKY_AD_IDS) {
+            val nodes = root.findAccessibilityNodeInfosByViewId(id)
+            if (nodes.isNotEmpty()) {
+                val target = nodes.firstOrNull { it.isVisibleToUser && it.isEnabled }
+                if (target != null) {
+                    val clickable = if (target.isClickable) target else findClickableParent(target)
+                    if (clickable != null) {
+                        clickable.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                        Log.d(TAG, "Sticky ad dismissed via view ID: $id")
+                        nodes.forEach { safeRecycle(it) }
+                        return
+                    }
+                }
+                nodes.forEach { safeRecycle(it) }
+            }
+        }
+    }
+
     private fun isShortsPlayerVisible(root: AccessibilityNodeInfo): Boolean {
         val screenRect = Rect()
         root.getBoundsInScreen(screenRect)
@@ -367,21 +415,78 @@ class AntiShortsService : AccessibilityService() {
     }
 
     private fun handleYtShortsInFeed(root: AccessibilityNodeInfo) {
+        // Try by View IDs first (more accurate)
+        for (id in YT_SHORTS_SHELF_IDS) {
+            val shelves = root.findAccessibilityNodeInfosByViewId(id)
+            if (shelves.isNotEmpty()) {
+                for (shelf in shelves) {
+                    if (shelf.isVisibleToUser) {
+                        // Find child menu button within the shelf
+                        val menuBtn = findMenuButtonInside(shelf)
+                        if (menuBtn != null) {
+                            openMenuAndDismissIfShort(menuBtn, YT_FEWER_SHORTS_TEXT, "YT Shorts Shelf (ID)")
+                            shelves.forEach { safeRecycle(it) }
+                            return
+                        }
+                    }
+                    safeRecycle(shelf)
+                }
+            }
+        }
+
+        // Fallback to text search
         for (text in YT_SHORTS_SHELF_TEXT) {
             val nodes = root.findAccessibilityNodeInfosByText(text)
             if (nodes.isNotEmpty()) {
                 for (node in nodes) {
-                    val menuBtn = findMenuButtonNear(node)
-                    if (menuBtn != null) {
-                        openMenuAndDismissIfShort(menuBtn, YT_FEWER_SHORTS_TEXT, "YT Shorts shelf")
-                        nodes.forEach { safeRecycle(it) }
-                        return
+                    if (node.isVisibleToUser) {
+                        val menuBtn = findMenuButtonNear(node)
+                        if (menuBtn != null) {
+                            openMenuAndDismissIfShort(menuBtn, YT_FEWER_SHORTS_TEXT, "YT Shorts Shelf (Text)")
+                            nodes.forEach { safeRecycle(it) }
+                            return
+                        }
                     }
                     safeRecycle(node)
                 }
-                break
             }
         }
+    }
+
+    private fun handleYtSubsOnly(root: AccessibilityNodeInfo) {
+        // Look for the Home tab indicator. If we are on Home, nudge to Subscriptions.
+        // YouTube Tab IDs: com.google.android.youtube:id/tab_home, com.google.android.youtube:id/tab_subscriptions
+        val homeTab = root.findAccessibilityNodeInfosByViewId("com.google.android.youtube:id/tab_home").firstOrNull()
+        if (homeTab != null && homeTab.isSelected) {
+            val subsTab = root.findAccessibilityNodeInfosByViewId("com.google.android.youtube:id/tab_subscriptions").firstOrNull()
+            if (subsTab != null && subsTab.isVisibleToUser) {
+                Log.d(TAG, "Subs Only mode: Nudging to Subscriptions tab")
+                subsTab.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            }
+            safeRecycle(subsTab)
+        }
+        safeRecycle(homeTab)
+    }
+
+    private fun handleAlgorithmicNudge(root: AccessibilityNodeInfo) {
+        val now = System.currentTimeMillis()
+        if (now - lastFeedNudgeTime < FEED_NUDGE_MIN_GAP_MS) return
+
+        // 1. Differentiate: if we are in a video player (not shorts)
+        // Video player often has "com.google.android.youtube:id/player_view"
+        val player = root.findAccessibilityNodeInfosByViewId("com.google.android.youtube:id/player_view").firstOrNull()
+        if (player != null && player.isVisibleToUser) {
+            // Check if it's NOT a short (we already back-out from shorts player)
+            // Look for "Like" button in the player controls
+            val likeBtn = root.findAccessibilityNodeInfosByViewId("com.google.android.youtube:id/like_button").firstOrNull()
+            if (likeBtn != null && likeBtn.isVisibleToUser && !likeBtn.isSelected) {
+                Log.d(TAG, "Algorithm Nudge: Liking long-form content")
+                likeBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                lastFeedNudgeTime = now
+            }
+            safeRecycle(likeBtn)
+        }
+        safeRecycle(player)
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -560,7 +665,7 @@ class AntiShortsService : AccessibilityService() {
     }
 
     private fun countMenuItemsRecursive(node: AccessibilityNodeInfo, depth: Int, onItem: () -> Unit) {
-        if (depth > 8) return
+        if (depth > 12) return
         val className = node.className?.toString() ?: ""
         if (node.isClickable && node.isVisibleToUser &&
             !className.contains("Layout") &&
@@ -569,13 +674,32 @@ class AntiShortsService : AccessibilityService() {
             !className.contains("ListView")
         ) {
             val hasContent = !node.text.isNullOrEmpty() || !node.contentDescription.isNullOrEmpty()
-            if (hasContent) onItem()
+            if (hasContent) {
+                onItem()
+            }
         }
         for (i in 0 until node.childCount) {
             val child = node.getChild(i) ?: continue
             countMenuItemsRecursive(child, depth + 1, onItem)
             safeRecycle(child)
         }
+    }
+
+    private fun findMenuButtonInside(container: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        val stack = mutableListOf(container)
+        while (stack.isNotEmpty()) {
+            val node = stack.removeAt(stack.size - 1)
+            val desc = node.contentDescription?.toString()?.lowercase() ?: ""
+            if (node.isClickable && node.isVisibleToUser &&
+                (MENU_BUTTON_KEYWORDS.any { desc.contains(it) } || node.viewIdResourceName?.contains("menu") == true)) {
+                return node
+            }
+            for (i in 0 until node.childCount) {
+                val child = node.getChild(i) ?: continue
+                stack.add(child)
+            }
+        }
+        return null
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -591,8 +715,9 @@ class AntiShortsService : AccessibilityService() {
         if (!ytEnabled && !fbEnabled && !igEnabled && !ttEnabled) return
 
         val now = System.currentTimeMillis()
-        if (now - lastBackPressTime < 500L) return
+        if (now - lastBackPressTime < 1000L) return
 
+        // 1. Check for specific text keywords in the page content (fallback)
         val targets = buildList {
             if (ytEnabled) { add("youtube.com/shorts"); add("youtu.be/shorts") }
             if (fbEnabled) { add("facebook.com/reel"); add("fb.watch") }
@@ -603,11 +728,34 @@ class AntiShortsService : AccessibilityService() {
         for (target in targets) {
             val nodes = root.findAccessibilityNodeInfosByText(target)
             if (nodes.isNotEmpty()) {
+                val visible = nodes.any { it.isVisibleToUser }
                 nodes.forEach { safeRecycle(it) }
-                Log.d(TAG, "Browser blocked: $target")
-                lastBackPressTime = now
-                performGlobalAction(GLOBAL_ACTION_BACK)
-                return
+                if (visible) {
+                    Log.d(TAG, "Browser content block: $target")
+                    lastBackPressTime = now
+                    performGlobalAction(GLOBAL_ACTION_BACK)
+                    return
+                }
+            }
+        }
+
+        // 2. Check the URL bar specifically (much more reliable)
+        // Chrome URL bar ID is often "com.android.chrome:id/url_bar"
+        val urlNodes = root.findAccessibilityNodeInfosByViewId("${currentPkg}:id/url_bar")
+            .ifEmpty { root.findAccessibilityNodeInfosByViewId("${currentPkg}:id/url_edit_text") }
+            .ifEmpty { root.findAccessibilityNodeInfosByViewId("${currentPkg}:id/location_bar") }
+
+        if (urlNodes.isNotEmpty()) {
+            for (node in urlNodes) {
+                val urlTxt = node.text?.toString()?.lowercase() ?: ""
+                if (targets.any { urlTxt.contains(it) }) {
+                    Log.d(TAG, "Browser URL block: $urlTxt")
+                    lastBackPressTime = now
+                    performGlobalAction(GLOBAL_ACTION_BACK)
+                    urlNodes.forEach { safeRecycle(it) }
+                    return
+                }
+                safeRecycle(node)
             }
         }
     }

@@ -237,6 +237,8 @@ export default function ShieldScreen() {
           <ToggleItem C={C} label="Remove Shorts from Feed" description="Dismisses Shorts shelf via 3-dot menu" value={settings.youtube.removeShorts} onValueChange={(v) => updateYoutube("removeShorts", v)} icon={<Feather name="list" size={18} color={C.tint} />} disabled={!settings.youtube.enabled} />
           <View style={{ height: 1, backgroundColor: C.border, marginVertical: 8 }} />
           <ToggleItem C={C} label="Auto-Back from Short" description="Exits immediately if a Short video opens" value={settings.youtube.autoBack} onValueChange={(v) => updateYoutube("autoBack", v)} icon={<Feather name="corner-up-left" size={18} color={C.amber} />} disabled={!settings.youtube.enabled} />
+          <View style={{ height: 1, backgroundColor: C.border, marginVertical: 8 }} />
+          <ToggleItem C={C} label="Subscribed Channels Only" description="Filters feed to only show videos from channels you follow" value={settings.youtube.subscribedOnly} onValueChange={(v) => updateYoutube("subscribedOnly", v)} icon={<MaterialCommunityIcons name="account-heart" size={18} color={C.green} />} disabled={!settings.youtube.enabled} />
         </Card>
 
         <View style={{ height: 12 }} />

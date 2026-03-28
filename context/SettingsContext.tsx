@@ -23,10 +23,11 @@ export interface Settings {
   isServiceEnabled: boolean;
   systemEnabled: boolean;
   skipAds: boolean;
-  youtube: {
+    youtube: {
     enabled: boolean;
     removeShorts: boolean;
     autoBack: boolean;
+    subscribedOnly: boolean;
   };
   facebook: {
     enabled: boolean;
@@ -74,6 +75,7 @@ const defaultSettings: Settings = {
     enabled: true,
     removeShorts: true,
     autoBack: true,
+    subscribedOnly: false,
   },
   facebook: {
     enabled: true,
@@ -213,6 +215,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       bedtimeStartMin: s.bedtime.startMin,
       bedtimeEndHour: s.bedtime.endHour,
       bedtimeEndMin: s.bedtime.endMin,
+      ytSubsOnly: s.youtube.subscribedOnly,
     });
   };
 
