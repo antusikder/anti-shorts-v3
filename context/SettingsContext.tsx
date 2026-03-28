@@ -47,9 +47,9 @@ export interface Settings {
   blockActive: boolean;
   privacy: {
     pin: string | null;
-    isDisguised: boolean;
     recoveryEmail: string;
   };
+  suddenBlockEndTime: number;
   detoxEndTime: number;
   stats: {
     shortsShieldedToday: number;
@@ -122,9 +122,10 @@ const defaultSettings: Settings = {
   blockActive: false,
   privacy: {
     pin: null,
-    isDisguised: false,
     recoveryEmail: "",
   },
+  suddenBlockEndTime: 0,
+  detoxEndTime: 0,
   stats: {
     shortsShieldedToday: 0,
     reelsRejectedToday: 0,
@@ -152,7 +153,6 @@ const defaultSettings: Settings = {
     rewardPoints: 0,
     streakDays: 0,
   },
-  detoxEndTime: 0,
 };
 
 const STORAGE_KEY = "@productive:settings_v3";
@@ -178,6 +178,7 @@ interface SettingsContextType {
   updateNutrition: (data: Partial<Settings["nutrition"]>) => void;
   updateUsage: (data: Partial<Settings["usage"]>) => void;
   resetStats: () => void;
+  triggerSuddenBlock: (minutes: number) => void;
   isLoaded: boolean;
 }
 
@@ -226,6 +227,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           usage: { ...defaultSettings.usage, ...parsed.usage },
           feedMode: parsed.feedMode ?? "off",
           detoxEndTime: parsed.detoxEndTime ?? 0,
+          suddenBlockEndTime: parsed.suddenBlockEndTime ?? 0,
         };
         setSettings(merged);
       }
@@ -264,6 +266,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       bedtimeEndMin: s.bedtime.endMin,
       ytSubsOnly: s.youtube.subscribedOnly,
       detoxEndTime: s.detoxEndTime,
+      suddenBlockEndTime: s.suddenBlockEndTime,
     });
   };
 
@@ -383,6 +386,13 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     }));
   }, [update]);
 
+  const triggerSuddenBlock = useCallback((minutes: number) => {
+    update((p) => ({
+      ...p,
+      suddenBlockEndTime: Date.now() + minutes * 60000
+    }));
+  }, [update]);
+
   const incrementStat = useCallback(
     (stat: "shorts" | "reels" | "ads") =>
       update((p) => {
@@ -425,6 +435,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         updateNutrition,
         updateUsage,
         resetStats,
+        triggerSuddenBlock,
         isLoaded,
       }}
     >

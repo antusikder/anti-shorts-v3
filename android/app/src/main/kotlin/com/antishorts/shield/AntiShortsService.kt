@@ -58,6 +58,7 @@ class AntiShortsService : AccessibilityService() {
         const val PREF_BEDTIME_START_M  = "bedtime_start_min"
         const val PREF_BEDTIME_END_H    = "bedtime_end_hour"
         const val PREF_BEDTIME_END_M    = "bedtime_end_min"
+        const val PREF_SUDDEN_BLOCK     = "sudden_block_end_time"
 
         const val PKG_YOUTUBE          = "com.google.android.youtube"
         const val PKG_FACEBOOK         = "com.facebook.katana"
@@ -155,7 +156,9 @@ class AntiShortsService : AccessibilityService() {
             "com.google.android.youtube:id/skip_ad_button_compact",
             "com.google.android.youtube:id/ad_close_button",
             "com.google.android.youtube:id/ad_presenter_overlay",
-            "com.google.android.youtube:id/companion_ad_container"
+            "com.google.android.youtube:id/companion_ad_container",
+            "com.google.android.youtube:id/masthead_ad_container",
+            "com.google.android.youtube:id/player_overlay_ads_ui_container_view"
         )
 
         val MENU_BUTTON_KEYWORDS = setOf("more", "option", "menu", "overflow")
@@ -196,10 +199,10 @@ class AntiShortsService : AccessibilityService() {
             if (now - lastCheckTime < interval) return
             lastCheckTime = now
 
-            // 1. Dopamine Detox Check (v3.2)
-            if (isDetoxActive()) {
+            // 1. Dopamine Detox & Sudden Block Check
+            if (isDetoxActive() || isSuddenBlockActive()) {
                 if (getBlockList().contains(pkg)) {
-                    Log.d(TAG, "Detox Active: Blocking $pkg")
+                    Log.d(TAG, "Detox/Panic Active: Blocking $pkg")
                     performGlobalAction(GLOBAL_ACTION_HOME)
                     return
                 }
@@ -295,6 +298,7 @@ class AntiShortsService : AccessibilityService() {
                         if (clickable != null) {
                             clickable.performAction(AccessibilityNodeInfo.ACTION_CLICK)
                             Log.d(TAG, "YouTube Ad/Overlay dismissed via ID: $id")
+                            notifyStat("ads")
                             nodes.forEach { safeRecycle(it) }
                             return // Early exit if we dismissed something
                         }
@@ -302,7 +306,10 @@ class AntiShortsService : AccessibilityService() {
                     nodes.forEach { safeRecycle(it) }
                 }
             }
-            if (skipAdByText(root)) return
+            if (skipAdByText(root)) {
+                notifyStat("ads")
+                return
+            }
         }
 
         // Priority 2: Exit Shorts player immediately (400ms debounce)
@@ -311,6 +318,7 @@ class AntiShortsService : AccessibilityService() {
             if (now - lastBackPressTime > 400L) {
                 Log.d(TAG, "YT Shorts player detected — pressing BACK")
                 lastBackPressTime = now
+                notifyStat("shorts")
                 performGlobalAction(GLOBAL_ACTION_BACK)
                 // Safety retry after 500ms if still showing
                 handler.postDelayed({
@@ -422,6 +430,15 @@ class AntiShortsService : AccessibilityService() {
                 nodes.forEach { safeRecycle(it) }
             }
         }
+        // Fallback: search for "Ad ·" and find the nearest "options" button
+        val adLabel = root.findAccessibilityNodeInfosByText("Ad ·").firstOrNull { it.isVisibleToUser }
+        if (adLabel != null) {
+            val menu = findMenuButtonNear(adLabel)
+            if (menu != null) {
+                openMenuAndDismissIfShort(menu, AD_DISMISS_TEXTS, "Sticky Ad Menu")
+            }
+            safeRecycle(adLabel)
+        }
     }
 
     private fun isShortsPlayerVisible(root: AccessibilityNodeInfo): Boolean {
@@ -469,7 +486,7 @@ class AntiShortsService : AccessibilityService() {
             val nodes = root.findAccessibilityNodeInfosByText(text)
             if (nodes.isNotEmpty()) {
                 for (node in nodes) {
-                    if (node.isVisibleToUser) {
+                    if (node.isVisibleToUser && isLikelyShortsShelf(node)) {
                         val menuBtn = findMenuButtonNear(node)
                         if (menuBtn != null) {
                             openMenuAndDismissIfShort(menuBtn, YT_FEWER_SHORTS_TEXT, "YT Shorts Shelf (Text)")
@@ -481,6 +498,27 @@ class AntiShortsService : AccessibilityService() {
                 }
             }
         }
+    }
+
+    /** Extensive logic to verify if a node is actually a Shorts shelf */
+    private fun isLikelyShortsShelf(node: AccessibilityNodeInfo): Boolean {
+        // 1. Text check
+        val txt = node.text?.toString() ?: ""
+        if (YT_SHORTS_SHELF_TEXT.none { txt.contains(it) }) return false
+        
+        // 2. Hierarchy check (Shorts shelves are usually children of a horizontal list)
+        var parent = node.parent
+        while (parent != null) {
+            val className = parent.className?.toString() ?: ""
+            if (className.contains("RecyclerView") || className.contains("Horizontal")) {
+                safeRecycle(parent)
+                return true
+            }
+            val next = parent.parent
+            safeRecycle(parent)
+            parent = next
+        }
+        return false // Not in a shelf-like container
     }
 
     private fun handleYtSubsOnly(root: AccessibilityNodeInfo) {
@@ -504,6 +542,10 @@ class AntiShortsService : AccessibilityService() {
 
     private fun isDetoxActive(): Boolean {
         val endTime = prefs.getLong(PREF_DETOX_END_TIME, 0L)
+        return endTime > System.currentTimeMillis()
+    }
+    private fun isSuddenBlockActive(): Boolean {
+        val endTime = prefs.getLong(PREF_SUDDEN_BLOCK, 0L)
         return endTime > System.currentTimeMillis()
     }
 
@@ -658,6 +700,9 @@ class AntiShortsService : AccessibilityService() {
                             clickable.performAction(AccessibilityNodeInfo.ACTION_CLICK)
                             clicked = true
                             Log.d(TAG, "$logLabel dismissed via: '$text'")
+                            if (logLabel.contains("Shorts")) notifyStat("shorts")
+                            else if (logLabel.contains("Reel")) notifyStat("reels")
+                            else if (logLabel.contains("Ad")) notifyStat("ads")
                         }
                         nodes.forEach { safeRecycle(it) }
                         if (clicked) break
@@ -736,10 +781,21 @@ class AntiShortsService : AccessibilityService() {
         if (now - lastBackPressTime < 1500L) return
 
         val targets = buildList {
-            if (ytEnabled) { add("youtube.com/shorts"); add("youtu.be/shorts") }
-            if (fbEnabled) { add("facebook.com/reel"); add("fb.watch") }
-            if (igEnabled) { add("instagram.com/reel"); add("instagram.com/reels") }
-            if (ttEnabled) { add("tiktok.com") }
+            if (ytEnabled) { 
+                add("youtube.com/shorts"); add("youtu.be/shorts")
+                add("m.youtube.com/shorts"); add("youtube.com/hashtag/shorts")
+            }
+            if (fbEnabled) { 
+                add("facebook.com/reel"); add("fb.watch") 
+                add("facebook.com/reels"); add("facebook.com/watch/live")
+            }
+            if (igEnabled) { 
+                add("instagram.com/reel"); add("instagram.com/reels") 
+                add("instagram.com/p/") // Some IG posts are reels
+            }
+            if (ttEnabled) { 
+                add("tiktok.com"); add("vm.tiktok.com") 
+            }
         }
 
         // Try fuzzy-matching the URL bar first (covers all browsers)
@@ -859,6 +915,13 @@ class AntiShortsService : AccessibilityService() {
     private fun getBlockedList(): Set<String> {
         val raw = prefs.getString(PREF_BLOCKED_APPS, "") ?: ""
         return raw.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+    }
+
+    private fun notifyStat(type: String) {
+        // Broadcast to SettingsContext via a custom action or just trust future sync
+        // For now, we rely on the bridge to update stats if we had a two-way sync, 
+        // but here we just log it for debugging the "full proof" logic.
+        Log.d(TAG, "Elite Shield Action: $type triggered")
     }
 
     private fun safeRecycle(node: AccessibilityNodeInfo?) {

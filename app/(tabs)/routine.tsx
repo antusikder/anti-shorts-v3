@@ -1,38 +1,42 @@
-import React, { useState } from "react";
+import { Feather, MaterialCommunityIcons, Ionicons, FontAwesome5 } from "@expo/vector-icons";
+import React, { useState, useEffect } from "react";
 import {
-  View,
-  Text,
   ScrollView,
   StyleSheet,
+  Text,
   TouchableOpacity,
+  View,
+  Dimensions,
   Switch,
-  TextInput,
 } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
-import { MaterialCommunityIcons, Feather, Ionicons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
-import { useSettings } from "@/context/SettingsContext";
-import Colors from "@/constants/colors";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
+import * as Haptics from "expo-haptics";
+import Colors from "@/constants/colors";
+import { useSettings } from "@/context/SettingsContext";
 
-// ─── Components ──────────────────────────────────────────────────────────────
+const { width } = Dimensions.get("window");
 
-function Card({ children, style, C }: { children: React.ReactNode; style?: any; C: any }) {
+// ─── Sub-components ──────────────────────────────────────────────────────────
+
+function SectionHeader({ icon, title, subtitle, C }: { icon: string; title: string; subtitle?: string; C: any }) {
   return (
-    <View style={[styles.card, { backgroundColor: C.backgroundCard, borderColor: C.border }, style]}>
-      {children}
+    <View style={{ marginBottom: 14 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+        <MaterialCommunityIcons name={icon as any} size={20} color={C.amber} />
+        <View>
+          <Text style={{ fontSize: 16, fontFamily: "Inter_700Bold", color: "#FFFFFF" }}>{title}</Text>
+          {subtitle && <Text style={{ fontSize: 12, fontFamily: "Inter_400Regular", color: "#A0A0B0", marginTop: 1 }}>{subtitle}</Text>}
+        </View>
+      </View>
     </View>
   );
 }
 
-function SectionHeader({ title, icon, subtitle, C }: { title: string; icon: string; subtitle?: string; C: any }) {
+function Card({ children, style, C }: { children: React.ReactNode; style?: object; C: any }) {
   return (
-    <View style={styles.sectionHeader}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <MaterialCommunityIcons name={icon as any} size={20} color={C.amber} />
-        <Text style={[styles.sectionTitle, { color: C.text }]}>{title}</Text>
-      </View>
-      {subtitle && <Text style={styles.sectionSubtitle}>{subtitle}</Text>}
+    <View style={[{ backgroundColor: C.backgroundCard, borderRadius: 24, padding: 18, borderWidth: 1, borderColor: C.border }, style]}>
+      {children}
     </View>
   );
 }
@@ -40,142 +44,117 @@ function SectionHeader({ title, icon, subtitle, C }: { title: string; icon: stri
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 
 export default function RoutineScreen() {
+  const C = Colors.dark;
   const insets = useSafeAreaInsets();
   const { settings, updateBedtime } = useSettings();
-  const C = Colors.dark;
 
-  // Planner State (Simplified)
-  const [tasks, setTasks] = useState([
-    { id: 1, text: "Morning meditation", completed: false },
-    { id: 2, text: "Elite Workout session", completed: true },
-    { id: 3, text: "No social media until 5 PM", completed: false },
-  ]);
+  const [focusTimer, setFocusTimer] = useState(25 * 60); // 25 mins
+  const [isTimerActive, setIsTimerActive] = useState(false);
 
-  const toggleTask = (id: number) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setTasks(t => t.map(item => item.id === id ? { ...item, completed: !item.completed } : item));
+  useEffect(() => {
+    let interval: any;
+    if (isTimerActive && focusTimer > 0) {
+      interval = setInterval(() => setFocusTimer(t => t - 1), 1000);
+    } else if (focusTimer === 0) {
+      setIsTimerActive(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+    return () => clearInterval(interval);
+  }, [isTimerActive, focusTimer]);
+
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
   return (
-    <LinearGradient colors={["#0D0B1E", "#121225"]} style={styles.container}>
+    <LinearGradient colors={["#0D0B1E", "#05050A"]} style={{ flex: 1 }}>
       <ScrollView
-        contentContainerStyle={{
-          paddingTop: insets.top + 20,
-          paddingBottom: insets.bottom + 100,
-          paddingHorizontal: 20,
-        }}
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: insets.bottom + 110 }}
       >
-        <View style={styles.header}>
-           <Text style={styles.headerTitle}>Elite Routine</Text>
-           <Text style={styles.headerSubtitle}>Master your day with discipline</Text>
+        <View style={{ paddingHorizontal: 20, marginBottom: 24 }}>
+           <Text style={{ fontSize: 32, fontFamily: "Inter_700Bold", color: "#FFFFFF" }}>Elite Routine</Text>
+           <Text style={{ fontSize: 14, fontFamily: "Inter_400Regular", color: "#A0A0B0", marginTop: 4 }}>High-frequency discipline management</Text>
         </View>
 
-        {/* ── Daily Planner ── */}
+        {/* ── Focus Flow (Pomodoro) ── */}
+        <Card C={C} style={{ marginBottom: 16 }}>
+           <SectionHeader title="Deep Focus Flow" icon="timer-outline" C={C} />
+           <View style={styles.timerContainer}>
+              <Text style={styles.timerText}>{formatTime(focusTimer)}</Text>
+              <View style={styles.timerControls}>
+                 <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setIsTimerActive(!isTimerActive); }} style={[styles.timerBtn, { backgroundColor: isTimerActive ? C.danger + '20' : C.amber + '20', borderColor: isTimerActive ? C.danger : C.amber }]}>
+                    <Ionicons name={isTimerActive ? "pause" : "play"} size={24} color={isTimerActive ? C.danger : C.amber} />
+                 </TouchableOpacity>
+                 <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setFocusTimer(25 * 60); setIsTimerActive(false); }} style={styles.timerResetBtn}>
+                    <MaterialCommunityIcons name="refresh" size={24} color="#A0A0B0" />
+                 </TouchableOpacity>
+              </View>
+           </View>
+        </Card>
+
+        {/* ── Discipline Heatmap (Simulation) ── */}
+        <Card C={C} style={{ marginBottom: 16 }}>
+           <SectionHeader title="Discipline Consistency" icon="grid" C={C} />
+           <View style={styles.heatmap}>
+              {Array.from({ length: 28 }).map((_, i) => (
+                 <View key={i} style={[styles.heatBox, { backgroundColor: i < 18 ? C.amber + (0.1 + (i/28)).toFixed(2) : 'rgba(255,255,255,0.05)' }]} />
+              ))}
+           </View>
+           <Text style={styles.heatmapLabel}>18 Day Discipline Streak</Text>
+        </Card>
+
+        {/* ── Bedtime Cycle ── */}
         <Card C={C}>
-          <SectionHeader title="Daily Intentions" icon="calendar-check" subtitle="Stay focused on what matters" C={C} />
-          <View style={{ gap: 10 }}>
-            {tasks.map(task => (
-              <TouchableOpacity
-                key={task.id}
-                onPress={() => toggleTask(task.id)}
-                style={[styles.taskRow, { borderColor: task.completed ? C.amber + '40' : C.border }]}
-              >
-                <MaterialCommunityIcons 
-                  name={task.completed ? "checkbox-marked-circle" : "checkbox-blank-circle-outline"} 
-                  size={24} 
-                  color={task.completed ? C.amber : C.textMuted} 
-                />
-                <Text style={[styles.taskText, { color: task.completed ? C.textMuted : C.text, textDecorationLine: task.completed ? 'line-through' : 'none' }]}>
-                  {task.text}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+           <SectionHeader title="Circadian Rhythm" icon="weather-night" C={C} />
+           <View style={styles.bedtimeRow}>
+              <View>
+                 <Text style={styles.bedtimeLabel}>Restorative Sleep</Text>
+                 <Text style={styles.bedtimeValue}>22:00 - 06:00</Text>
+              </View>
+              <Switch
+                value={settings.bedtime.enabled}
+                onValueChange={(v: boolean) => updateBedtime({ ...settings.bedtime, enabled: v })}
+                trackColor={{ false: "#333", true: C.amber + "88" }}
+                thumbColor={settings.bedtime.enabled ? C.amber : "#f4f3f4"}
+              />
+           </View>
+           <Text style={styles.bedtimeDesc}>Deep concentration requires deep recovery. Bedtime mode locks all distractions automatically.</Text>
         </Card>
 
         <View style={{ height: 16 }} />
 
-        {/* ── Deep Sleep ── */}
+        {/* ── Planner Teaser ── */}
         <Card C={C}>
-          <SectionHeader title="Deep Sleep Cycle" icon="weather-night" subtitle="Optimize recovery and focus" C={C} />
-          <View style={styles.row}>
-             <View>
-                <Text style={styles.itemTitle}>Bedtime Mode</Text>
-                <Text style={styles.itemDesc}>Block all social apps at night</Text>
-             </View>
-             <Switch 
-               value={settings.bedtime.enabled} 
-               onValueChange={(v) => updateBedtime({ ...settings.bedtime, enabled: v })}
-               trackColor={{ false: "#333", true: C.amber + "88" }}
-               thumbColor={settings.bedtime.enabled ? C.amber : "#f4f3f4"}
-             />
-          </View>
-          
-          <View style={styles.timeGrid}>
-             <View style={styles.timeBox}>
-                <Text style={styles.timeLabel}>Bedtime</Text>
-                <Text style={styles.timeValue}>{settings.bedtime.startHour}:{settings.bedtime.startMin === 0 ? "00" : settings.bedtime.startMin}</Text>
-             </View>
-             <MaterialCommunityIcons name="arrow-right" size={20} color={C.textMuted} style={{ marginTop: 20 }} />
-             <View style={styles.timeBox}>
-                <Text style={styles.timeLabel}>Wake up</Text>
-                <Text style={styles.timeValue}>{settings.bedtime.endHour}:{settings.bedtime.endMin === 0 ? "00" : settings.bedtime.endMin}</Text>
-             </View>
-          </View>
+           <SectionHeader title="Strategic Planner" icon="format-list-checks" C={C} />
+           <View style={styles.plannerTeaser}>
+              <View style={styles.teaserRow}><Ionicons name="checkbox" size={18} color={C.amber} /><Text style={styles.teaserText}>6:00 AM - Mental Clarity Meditation</Text></View>
+              <View style={styles.teaserRow}><Ionicons name="checkbox" size={18} color={C.amber} /><Text style={styles.teaserText}>7:30 AM - Heavy Lift Session</Text></View>
+              <View style={styles.teaserRow}><Ionicons name="square-outline" size={18} color={C.amber} /><Text style={styles.teaserText}>9:00 AM - Strategic Deep Work</Text></View>
+           </View>
         </Card>
 
-        <View style={{ height: 16 }} />
-
-        {/* ── Elite Schedule ── */}
-        <Card C={C}>
-          <SectionHeader title="Discipline Schedule" icon="clock-outline" subtitle="Strict time blocking for high performance" C={C} />
-          <View style={{ gap: 12 }}>
-             <ScheduleItem time="06:00" label="Wake up & Hydrate" icon="water" color="#4A90E2" C={C} />
-             <ScheduleItem time="08:00" label="Deep Work Session" icon="laptop" color="#FFB000" C={C} />
-             <ScheduleItem time="12:00" label="High Protein Lunch" icon="food" color="#7ED321" C={C} />
-             <ScheduleItem time="17:00" label="Elite Workout" icon="arm-flex" color="#D0021B" C={C} />
-          </View>
-        </Card>
       </ScrollView>
     </LinearGradient>
   );
 }
 
-function ScheduleItem({ time, label, icon, color, C }: { time: string; label: string; icon: string; color: string; C: any }) {
-  return (
-    <View style={styles.scheduleRow}>
-       <Text style={styles.timeText}>{time}</Text>
-       <View style={[styles.dot, { backgroundColor: color }]} />
-       <View style={[styles.scheduleContent, { backgroundColor: C.backgroundSecondary }]}>
-          <MaterialCommunityIcons name={icon as any} size={18} color={color} />
-          <Text style={styles.scheduleLabel}>{label}</Text>
-       </View>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: { marginBottom: 20 },
-  headerTitle: { fontSize: 32, fontFamily: "Inter_700Bold", color: "#FFFFFF" },
-  headerSubtitle: { fontSize: 14, fontFamily: "Inter_400Regular", color: "#A0A0B0", marginTop: 4 },
-  card: { borderRadius: 24, padding: 20, borderWidth: 1 },
-  sectionHeader: { marginBottom: 16 },
-  sectionTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
-  sectionSubtitle: { fontSize: 12, fontFamily: "Inter_400Regular", color: "#A0A0B0", marginTop: 2 },
-  taskRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 16, borderWidth: 1, backgroundColor: "rgba(255,255,255,0.03)" },
-  taskText: { fontSize: 14, fontFamily: "Inter_500Medium" },
-  row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  itemTitle: { fontSize: 15, fontFamily: "Inter_600SemiBold", color: "#FFFFFF" },
-  itemDesc: { fontSize: 12, fontFamily: "Inter_400Regular", color: "#A0A0B0", marginTop: 2 },
-  timeGrid: { flexDirection: "row", justifyContent: "space-between", marginTop: 20, alignItems: "center" },
-  timeBox: { alignItems: "center", flex: 1 },
-  timeLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", color: "#A0A0B0", textTransform: "uppercase" },
-  timeValue: { fontSize: 24, fontFamily: "Inter_700Bold", color: "#FFFFFF", marginTop: 4 },
-  scheduleRow: { flexDirection: "row", alignItems: "center", gap: 12 },
-  timeText: { fontSize: 13, fontFamily: "Inter_700Bold", color: "#A0A0B0", width: 45 },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  scheduleContent: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderRadius: 14 },
-  scheduleLabel: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: "#FFFFFF" },
+  timerContainer: { alignItems: 'center', marginVertical: 10 },
+  timerText: { fontSize: 56, fontFamily: 'Inter_700Bold', color: '#FFFFFF' },
+  timerControls: { flexDirection: 'row', alignItems: 'center', gap: 20, marginTop: 10 },
+  timerBtn: { width: 60, height: 60, borderRadius: 30, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  timerResetBtn: { width: 50, height: 50, borderRadius: 25, backgroundColor: 'rgba(255,255,255,0.05)', alignItems: 'center', justifyContent: 'center' },
+  heatmap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 },
+  heatBox: { width: (width - 100) / 7, height: (width - 100) / 7, borderRadius: 6 },
+  heatmapLabel: { fontSize: 13, fontFamily: 'Inter_600SemiBold', color: '#A0A0B0', textAlign: 'center' },
+  bedtimeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  bedtimeLabel: { fontSize: 12, fontFamily: 'Inter_600SemiBold', color: '#A0A0B0' },
+  bedtimeValue: { fontSize: 24, fontFamily: 'Inter_700Bold', color: '#FFFFFF' },
+  bedtimeDesc: { fontSize: 12, fontFamily: 'Inter_400Regular', color: '#A0A0B0', lineHeight: 18 },
+  plannerTeaser: { gap: 10 },
+  teaserRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  teaserText: { fontSize: 13, fontFamily: 'Inter_400Regular', color: '#FFFFFF' },
 });

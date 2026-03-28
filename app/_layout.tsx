@@ -18,7 +18,7 @@ import { SettingsProvider } from "@/context/SettingsContext";
 import { PlannerProvider } from "@/context/PlannerContext";
 import { useSettings } from "@/context/SettingsContext";
 import Colors from "@/constants/colors";
-import CalculatorDecoy from "@/components/CalculatorDecoy";
+import PinLockScreen from "@/components/PinLockScreen";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -32,13 +32,13 @@ function RootLayoutNav() {
 
   if (!isLoaded) return null;
 
-  // Show calculator if PIN is set AND disguise mode is on AND not yet unlocked
-  const showLock = settings.privacy.pin && settings.privacy.isDisguised && !isUnlocked;
+  // Show lock if PIN is set and not yet unlocked
+  const showLock = settings.privacy.pin && !isUnlocked;
 
   if (showLock) {
     return (
-      <CalculatorDecoy
-        correctPin={settings.privacy.pin}
+      <PinLockScreen
+        correctPin={settings.privacy.pin!}
         C={C}
         onUnlock={() => setIsUnlocked(true)}
       />

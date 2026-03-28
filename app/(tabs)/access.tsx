@@ -1,4 +1,4 @@
-import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Feather, MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import React from "react";
 import {
   ScrollView,
@@ -15,7 +15,6 @@ import * as Haptics from "expo-haptics";
 
 import Colors from "@/constants/colors";
 import { useSettings, FeedMode } from "@/context/SettingsContext";
-import { AccessibilityModule } from "@/modules/AccessibilityModule";
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
@@ -83,8 +82,8 @@ export default function AccessScreen() {
   const insets = useSafeAreaInsets();
   const {
     settings,
-    updateYoutube, updateFacebook, updateInstagram, updateTiktok,
-    updateSkipAds, updateScanSpeed, updateFeedMode, resetStats
+    updateYoutube, updateFacebook,
+    updateSkipAds, updateFeedMode, resetStats, updatePrivacy
   } = useSettings();
 
   const handleReset = () => {
@@ -92,6 +91,24 @@ export default function AccessScreen() {
       { text: "Cancel", style: "cancel" },
       { text: "Reset", style: "destructive", onPress: resetStats }
     ]);
+  };
+
+  const togglePin = () => {
+    if (settings.privacy.pin) {
+       Alert.alert("Disable Lock", "Remove PIN protection?", [
+         { text: "Cancel", style: "cancel" },
+         { text: "Remove", style: "destructive", onPress: () => updatePrivacy("pin", null) }
+       ]);
+    } else {
+       Alert.prompt("Set PIN", "Enter a 4-digit code to lock Fresh Mind", (pin) => {
+         if (pin.length === 4) {
+           updatePrivacy("pin", pin);
+           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+         } else {
+           Alert.alert("Error", "PIN must be 4 digits");
+         }
+       });
+    }
   };
 
   return (
@@ -102,19 +119,31 @@ export default function AccessScreen() {
       >
         <View style={{ paddingHorizontal: 20, marginBottom: 24 }}>
            <Text style={{ fontSize: 32, fontFamily: "Inter_700Bold", color: "#FFFFFF" }}>Access Control</Text>
-           <Text style={{ fontSize: 14, fontFamily: "Inter_400Regular", color: "#A0A0B0", marginTop: 4 }}>Fine-tune your Elite digital shield</Text>
+           <Text style={{ fontSize: 14, fontFamily: "Inter_400Regular", color: "#A0A0B0", marginTop: 4 }}>Elite security & shielding configuration</Text>
         </View>
+
+        {/* ── Security Card ── */}
+        <Card C={C} style={{ marginBottom: 16 }}>
+          <SectionHeader title="Privacy Mastery" icon={<MaterialCommunityIcons name="security" size={18} color={C.amber} />} C={C} />
+          <TouchableOpacity onPress={togglePin} style={styles.actionRow}>
+             <View style={{ flex: 1 }}>
+                <Text style={styles.actionText}>{settings.privacy.pin ? "Change Shield PIN" : "Enable Security Lock"}</Text>
+                <Text style={styles.actionDesc}>Prevent unauthorized access to your settings</Text>
+             </View>
+             <MaterialCommunityIcons name={settings.privacy.pin ? "lock" : "lock-open-outline"} size={22} color={settings.privacy.pin ? C.amber : C.textMuted} />
+          </TouchableOpacity>
+        </Card>
 
         {/* ── YouTube Control ── */}
         <Card C={C}>
           <SectionHeader title="YouTube Mastery" icon={<MaterialCommunityIcons name="youtube" size={18} color={C.youtube} />} C={C} />
-          <ToggleItem C={C} label="Active Protection" description="Enable scanning on YouTube" value={settings.youtube.enabled} onValueChange={(v) => updateYoutube("enabled", v)} />
+          <ToggleItem C={C} label="Active Protection" value={settings.youtube.enabled} onValueChange={(v) => updateYoutube("enabled", v)} />
           <View style={styles.divider} />
-          <ToggleItem C={C} label="Eliminate Shorts" description="Remove Shorts shelves from feed" value={settings.youtube.removeShorts} onValueChange={(v) => updateYoutube("removeShorts", v)} disabled={!settings.youtube.enabled} />
+          <ToggleItem C={C} label="Eliminate Shorts" value={settings.youtube.removeShorts} onValueChange={(v) => updateYoutube("removeShorts", v)} disabled={!settings.youtube.enabled} />
           <View style={styles.divider} />
-          <ToggleItem C={C} label="Auto-Skip Ads" description="Bypass video ads instantly" value={settings.skipAds} onValueChange={updateSkipAds} disabled={!settings.youtube.enabled} />
+          <ToggleItem C={C} label="Auto-Skip Ads" value={settings.skipAds} onValueChange={updateSkipAds} disabled={!settings.youtube.enabled} />
           <View style={styles.divider} />
-          <ToggleItem C={C} label="Subs Only Filter" description="Nudge toward followed channels" value={settings.youtube.subscribedOnly} onValueChange={(v) => updateYoutube("subscribedOnly", v)} disabled={!settings.youtube.enabled} />
+          <ToggleItem C={C} label="Subs Only Filter" value={settings.youtube.subscribedOnly} onValueChange={(v) => updateYoutube("subscribedOnly", v)} disabled={!settings.youtube.enabled} />
         </Card>
 
         <View style={{ height: 16 }} />
@@ -132,7 +161,7 @@ export default function AccessScreen() {
         {/* ── Algorithm Shaper ── */}
         <Card C={C}>
           <SectionHeader title="Smart Feed Engine" icon={<MaterialCommunityIcons name="brain" size={18} color={C.amber} />} C={C} />
-          <Text style={styles.description}>Shape your social media algorithm by automatically preferring high-quality content categories.</Text>
+          <Text style={styles.description}>Train your social media algorithms for peak performance.</Text>
           <View style={{ gap: 8, marginTop: 12 }}>
             {FEED_MODES.map((mode) => {
               const selected = settings.feedMode === mode.id;
@@ -163,9 +192,9 @@ export default function AccessScreen() {
              <Text style={[styles.actionText, { color: C.danger }]}>Reset Progress Stats</Text>
           </TouchableOpacity>
           <View style={styles.divider} />
-          <TouchableOpacity style={styles.actionRow}>
-             <MaterialCommunityIcons name="coffee" size={20} color={C.amber} />
-             <Text style={styles.actionText}>Buy Me a Coffee</Text>
+          <TouchableOpacity style={styles.actionRow} onPress={() => Alert.alert("Join Elite Support", "Send your contributions to keep the project alive.\nbKash: +8801581872622")}>
+             <MaterialCommunityIcons name="crown" size={20} color={C.amber} />
+             <Text style={styles.actionText}>Become an Elite Platinum Backer</Text>
           </TouchableOpacity>
           <Text style={styles.supportInfo}>bKash/Nagad: +8801581872622</Text>
         </Card>
@@ -183,5 +212,6 @@ const styles = StyleSheet.create({
   modeDesc: { fontSize: 12, fontFamily: "Inter_400Regular", color: "#A0A0B0" },
   actionRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12 },
   actionText: { fontSize: 15, fontFamily: "Inter_600SemiBold", color: "#FFFFFF" },
+  actionDesc: { fontSize: 12, fontFamily: "Inter_400Regular", color: "#A0A0B0", marginTop: 2 },
   supportInfo: { fontSize: 11, fontFamily: "Inter_400Regular", color: "#A0A0B0", marginTop: -4, marginLeft: 32 },
 });

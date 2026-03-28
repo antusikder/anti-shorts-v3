@@ -15,8 +15,7 @@ class AntiShortsPackage : ReactPackage {
 
     override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> {
         return listOf(
-            AntiShortsModule(reactContext),
-            LauncherModule(reactContext)
+            AntiShortsModule(reactContext)
         )
     }
 

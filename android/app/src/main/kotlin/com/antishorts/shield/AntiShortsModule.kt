@@ -125,6 +125,8 @@ class AntiShortsModule(reactContext: ReactApplicationContext) :
                 putBoolean(AntiShortsService.PREF_YT_SUBS_ONLY, settingsMap.getBoolean("ytSubsOnly"))
             if (settingsMap.hasKey("detoxEndTime"))
                 putLong(AntiShortsService.PREF_DETOX_END_TIME, settingsMap.getDouble("detoxEndTime").toLong())
+            if (settingsMap.hasKey("suddenBlockEndTime"))
+                putLong(AntiShortsService.PREF_SUDDEN_BLOCK, settingsMap.getDouble("suddenBlockEndTime").toLong())
         }.apply()
     }
 

@@ -1,4 +1,4 @@
-import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Feather, MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useState, useMemo } from "react";
 import {
   Platform,
@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Animated,
   Dimensions,
+  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -51,19 +52,30 @@ function Card({ children, style, C }: { children: React.ReactNode; style?: objec
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 
 export default function DashboardScreen() {
-  const colorScheme = useColorScheme();
   const C = Colors.dark; // Force Dark Deluxe
   const insets = useSafeAreaInsets();
-  const { settings, updateSystemEnabled, setServiceEnabled } = useSettings();
+  const { settings, updateSystemEnabled, setServiceEnabled, triggerSuddenBlock } = useSettings();
 
   const [isEnabled, setIsEnabled] = useState(false);
+  const [panicTimeLeft, setPanicTimeLeft] = useState(0);
   const pulseAnim = React.useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     checkStatus();
-    const interval = setInterval(checkStatus, 3000);
+    const interval = setInterval(() => {
+      checkStatus();
+      updatePanicTimer();
+    }, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [settings.suddenBlockEndTime]);
+
+  const updatePanicTimer = () => {
+    if (settings.suddenBlockEndTime > Date.now()) {
+      setPanicTimeLeft(Math.ceil((settings.suddenBlockEndTime - Date.now()) / 1000));
+    } else {
+      setPanicTimeLeft(0);
+    }
+  };
 
   useEffect(() => {
     if (isEnabled && settings.systemEnabled) {
@@ -85,11 +97,24 @@ export default function DashboardScreen() {
     setServiceEnabled(enabled);
   };
 
+  const handlePanic = () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    Alert.alert(
+      "Elite Panic Mode",
+      "Immediately lock all distracting apps for 1 minute to break the loop?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "ACTIVATE", style: "destructive", onPress: () => triggerSuddenBlock(1) }
+      ]
+    );
+  };
+
   const active = isEnabled && settings.systemEnabled;
+  const panicActive = panicTimeLeft > 0;
   
   // Progress Logic
   const todayUsage = settings.usage.screenTimeToday || 0;
-  const yesterdayUsage = settings.usage.screenTimeYesterday || 120; // Default fallback
+  const yesterdayUsage = settings.usage.screenTimeYesterday || 120;
   const progressRatio = Math.max(0, 1 - (todayUsage / yesterdayUsage));
   const focusLevel = useMemo(() => {
     if (progressRatio > 0.8) return { label: "Elite Focus", color: C.amber, icon: "crown" };
@@ -109,10 +134,10 @@ export default function DashboardScreen() {
               <Text style={styles.welcomeText}>Welcome back,</Text>
               <Text style={styles.userName}>Elite Mind</Text>
            </View>
-           <View style={[styles.statusBadge, { backgroundColor: active ? C.green + "20" : C.danger + "20", borderColor: active ? C.green : C.danger }]}>
-              <View style={[styles.statusDot, { backgroundColor: active ? C.green : C.danger }]} />
-              <Text style={[styles.statusText, { color: active ? C.green : C.danger }]}>{active ? "ACTIVE" : "OFF"}</Text>
-           </View>
+           <TouchableOpacity onPress={handlePanic} style={[styles.panicBtn, panicActive && styles.panicBtnActive]}>
+              <MaterialCommunityIcons name="lightning-bolt" size={20} color={panicActive ? "#000" : C.amber} />
+              <Text style={[styles.panicText, panicActive && { color: "#000" }]}>{panicActive ? `${panicTimeLeft}s` : "PANIC"}</Text>
+           </TouchableOpacity>
         </View>
 
         {/* ── Shield Pulse Deluxe ── */}
@@ -128,18 +153,19 @@ export default function DashboardScreen() {
            <Text style={[styles.shieldStatusText, { color: active ? C.amber : C.text }]}>
               {active ? "Elite Protection Active" : "Shield is Disengaged"}
            </Text>
-           <Text style={styles.shieldSubText}>
-              {active ? "Social stimuli are being intercepted" : "Enable to restore digital peace"}
-           </Text>
+           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+              <Ionicons name="hardware-chip" size={12} color={C.textMuted} />
+              <Text style={styles.shieldSubText}>Hierarchical Neural Scanner 4.1</Text>
+           </View>
         </View>
 
-        {/* ── Progress Report (v4.0) ── */}
+        {/* ── Progress Report ── */}
         <Card C={C} style={styles.progressCard}>
-           <SectionHeader title="Progress Mastery" icon={<MaterialCommunityIcons name="trending-up" size={18} color={C.amber} />} C={C} />
+           <SectionHeader title="Discipline Mastery" icon={<MaterialCommunityIcons name="trending-up" size={18} color={C.amber} />} C={C} />
            <View style={styles.progressRow}>
               <View>
                  <Text style={styles.progressLabel}>Daily Focus Goal</Text>
-                 <Text style={styles.progressValue}>{Math.round(progressRatio * 100)}% Improved</Text>
+                 <Text style={styles.progressValue}>{Math.round(progressRatio * 100)}% Enhanced</Text>
               </View>
               <View style={[styles.levelBadge, { backgroundColor: focusLevel.color + '20' }]}>
                  <MaterialCommunityIcons name={focusLevel.icon as any} size={14} color={focusLevel.color} />
@@ -150,27 +176,27 @@ export default function DashboardScreen() {
               <View style={[styles.progressBarFill, { width: `${Math.min(1, progressRatio) * 100}%`, backgroundColor: C.amber }]} />
            </View>
            <Text style={styles.motivationalText}>
-              {progressRatio > 0 ? "You are outperforming your past self. Keep going." : "The algorithm is winning today. Take back control."}
+              {progressRatio > 0.5 ? "Your prefrontal cortex is in total control." : "Digital dopamine is clouding your vision. Reset now."}
            </Text>
         </Card>
 
-        {/* ── Real-time Blocking Stats ── */}
+        {/* ── Stats Grid ── */}
         <View style={styles.statsGrid}>
-           <StatBox num={settings.stats.shortsShieldedToday} label="Shorts Dismissed" color={C.youtube} C={C} />
-           <StatBox num={settings.stats.reelsRejectedToday} label="Reels Blocked" color={C.facebook} C={C} />
-           <StatBox num={settings.stats.adsRemovedToday || 0} label="Ads Extinguished" color={C.amber} C={C} />
+           <StatBox num={settings.stats.shortsShieldedToday} label="Shorts Intercepted" color={C.youtube} C={C} />
+           <StatBox num={settings.stats.reelsRejectedToday} label="Reels Dismissed" color={C.facebook} C={C} />
+           <StatBox num={settings.stats.adsRemovedToday || 0} label="Ads Skiped" color={C.amber} C={C} />
         </View>
 
-        {/* ── Rewards Section ── */}
-        <Card C={C} style={{ marginTop: 12, backgroundColor: C.amber + '08' }}>
+        <View style={{ height: 16 }} />
+
+        {/* ── Elite Support & Rewards ── */}
+        <Card C={C} style={{ backgroundColor: 'rgba(212, 175, 55, 0.05)' }}>
            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <View>
-                 <Text style={styles.rewardsBalance}>{settings.usage.rewardPoints || 0} pts</Text>
-                 <Text style={styles.rewardsLabel}>Elite Mind Balance</Text>
+                 <Text style={[styles.rewardsBalance, { color: C.amber }]}>{settings.usage.rewardPoints || 0} Focus Points</Text>
+                 <Text style={styles.rewardsLabel}>Discipline Rank: Platinum Elite</Text>
               </View>
-              <TouchableOpacity style={styles.claimBtn}>
-                 <Text style={styles.claimText}>History</Text>
-              </TouchableOpacity>
+              <MaterialCommunityIcons name="crown" size={32} color={C.amber} />
            </View>
         </Card>
 
@@ -191,15 +217,15 @@ function StatBox({ num, label, color, C }: { num: number; label: string; color: 
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, marginBottom: 30 },
-  welcomeText: { fontSize: 14, fontFamily: "Inter_400Regular", color: "#A0A0B0" },
-  userName: { fontSize: 24, fontFamily: "Inter_700Bold", color: "#FFFFFF" },
-  statusBadge: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, borderWidth: 1 },
-  statusDot: { width: 6, height: 6, borderRadius: 3 },
-  statusText: { fontSize: 11, fontFamily: "Inter_700Bold", letterSpacing: 0.5 },
+  welcomeText: { fontSize: 13, fontFamily: "Inter_400Regular", color: "#A0A0B0" },
+  userName: { fontSize: 22, fontFamily: "Inter_700Bold", color: "#FFFFFF" },
+  panicBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: "rgba(255,176,0,0.3)", backgroundColor: "rgba(255,176,0,0.05)" },
+  panicBtnActive: { backgroundColor: "#FFB000", borderColor: "#FFB000" },
+  panicText: { fontSize: 11, fontFamily: "Inter_700Bold", color: "#FFB000" },
   shieldSection: { alignItems: "center", marginBottom: 30 },
   shieldButton: { width: 160, height: 160, borderRadius: 80, backgroundColor: "rgba(255,176,0,0.05)", borderWidth: 2, alignItems: "center", justifyContent: "center", shadowRadius: 20, shadowOpacity: 0.5, elevation: 10 },
   shieldStatusText: { fontSize: 20, fontFamily: "Inter_700Bold", marginTop: 20 },
-  shieldSubText: { fontSize: 13, fontFamily: "Inter_400Regular", color: "#A0A0B0", marginTop: 4 },
+  shieldSubText: { fontSize: 11, fontFamily: "Inter_400Regular", color: "#A0A0B0", textTransform: 'uppercase', letterSpacing: 1 },
   progressCard: { marginBottom: 16, borderColor: 'rgba(255,176,0,0.3)' },
   progressRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 12 },
   progressLabel: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: "#A0A0B0" },
@@ -213,8 +239,8 @@ const styles = StyleSheet.create({
   statBox: { flex: 1, borderRadius: 20, padding: 16, alignItems: "center", borderWidth: 1 },
   statNum: { fontSize: 22, fontFamily: "Inter_700Bold" },
   statLabel: { fontSize: 10, fontFamily: "Inter_400Regular", color: "#A0A0B0", textAlign: "center", marginTop: 4 },
-  rewardsBalance: { fontSize: 24, fontFamily: "Inter_700Bold", color: "#FFB000" },
-  rewardsLabel: { fontSize: 12, fontFamily: "Inter_400Regular", color: "#A0A0B0" },
+  rewardsBalance: { fontSize: 18, fontFamily: "Inter_700Bold" },
+  rewardsLabel: { fontSize: 12, fontFamily: "Inter_400Regular", color: "#A0A0B0", marginTop: 2 },
   claimBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 12, backgroundColor: "rgba(255,176,0,0.15)" },
   claimText: { color: "#FFB000", fontFamily: "Inter_700Bold", fontSize: 12 },
 });
