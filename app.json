@@ -45,10 +45,11 @@
       "reactCompiler": true
     },
     "extra": {
+      "router": {},
       "eas": {
-        "projectId": "51c279f8-2674-43f0-97f0-2fca32ac7a92"
+        "projectId": "552fb525-0221-48a2-a39e-4db4324800fd"
       }
     },
-    "owner": "antusikder"
+    "owner": "almansikder"
   }
 }

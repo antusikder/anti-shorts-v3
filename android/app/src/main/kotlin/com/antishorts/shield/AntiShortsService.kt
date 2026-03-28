@@ -118,8 +118,9 @@ class AntiShortsService : AccessibilityService() {
 
         // Ad Skipping identifiers
         val SKIP_AD_TEXTS = listOf(
-            "Skip ad", "Skip Ads", "Close ad", "Close advertisement", "Skip"
         )
+        val AD_CENTER_TEXTS = listOf("Ad Center", "About this ad", "Sponsored")
+        val AD_DISMISS_TEXTS = listOf("Dismiss", "Hide ad", "Stop seeing this ad", "Not interested")
 
         // Three-dot button descriptions
         val MENU_BUTTON_DESCS = listOf(
@@ -263,20 +264,56 @@ class AntiShortsService : AccessibilityService() {
             skipPlayingVideoAds(root)
         }
 
-        // Priority 2: Auto-back from Shorts player
+        // Priority 2: Auto-back from Shorts player (Forced Exit)
         if (prefs.getBoolean(PREF_YT_AUTO_BACK, true) && isShortsPlayerVisible(root)) {
             val now = System.currentTimeMillis()
-            if (now - lastBackPressTime > 500L) {
-                Log.d(TAG, "YT Shorts player — firing BACK")
+            // User requested 0.3 - 0.5s range. We use 400ms.
+            if (now - lastBackPressTime > 400L) {
+                Log.d(TAG, "YT Shorts player DETECTED — FORCING EXIT")
                 lastBackPressTime = now
                 performGlobalAction(GLOBAL_ACTION_BACK)
+                
+                // Extra safety: If still there after 450ms, fire again
+                handler.postDelayed({
+                    val retryRoot = rootInActiveWindow
+                    if (retryRoot != null && isShortsPlayerVisible(retryRoot)) {
+                        Log.d(TAG, "YT Shorts player STILL PRESENT — FORCING EXIT AGAIN")
+                        performGlobalAction(GLOBAL_ACTION_BACK)
+                    }
+                    try { retryRoot?.recycle() } catch (_: Exception) {}
+                }, 450L)
             }
             return
         }
 
-        // Priority 3: Remove Shorts shelf from feed
+        // Priority 3: Ad Center Link Dismissal
+        if (prefs.getBoolean(PREF_SKIP_ADS, true)) {
+            dismissAdCenterLinks(root)
+        }
+
+        // Priority 4: Remove Shorts shelf from feed
         if (prefs.getBoolean(PREF_YT_SHORTS, true)) {
             handleYtShortsInFeed(root)
+        }
+    }
+
+    private fun dismissAdCenterLinks(root: AccessibilityNodeInfo) {
+        for (text in AD_CENTER_TEXTS) {
+            val nodes = root.findAccessibilityNodeInfosByText(text)
+            if (nodes.isNotEmpty()) {
+                for (node in nodes) {
+                    if (node.isVisibleToUser) {
+                        val menuBtn = findMenuButtonNear(node)
+                        if (menuBtn != null) {
+                            Log.d(TAG, "Ad link menu found near '$text' — dismissing")
+                            openMenuAndDismissIfShort(menuBtn, AD_DISMISS_TEXTS, "Ad Link")
+                            nodes.forEach { try { it.recycle() } catch (_: Exception) {} }
+                            return
+                        }
+                    }
+                    try { node.recycle() } catch (_: Exception) {}
+                }
+            }
         }
     }
 
