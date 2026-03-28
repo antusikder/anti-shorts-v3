@@ -1,0 +1,53 @@
+[
+  {
+    "id": "2a5a0ab6-3978-4d13-aeec-7c4b9493ed13",
+    "status": "ERRORED",
+    "platform": "ANDROID",
+    "error": {
+      "errorCode": "EAS_BUILD_UNKNOWN_GRADLE_ERROR",
+      "message": "Gradle build failed with unknown error. See logs for the \"Run gradlew\" phase for more information."
+    },
+    "artifacts": {},
+    "fingerprint": {
+      "id": "019d341a-1ca0-7a56-856e-c76a21e81463",
+      "hash": "2f5939c95930d1401293291e265833772270e829"
+    },
+    "initiatingActor": {
+      "id": "e1c60bc8-875b-479d-88b6-9cf72138324b",
+      "displayName": "almansikder"
+    },
+    "logFiles": [
+      "https://job-logs.eascdn.net/production/2a5a0ab6-3978-4d13-aeec-7c4b9493ed13/1774695619987-50a3426e-c774-4abe-a442-076a6b2d20dd.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260328%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260328T121956Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=31ad5e1a76f77f90c14d74586e951374239306caef58f23396544f4ded435815679488a02ea5633bf29ff706eda0f14a25ed7b3dc9e2cc41d1f06bfc5c2ac6b68c1161770b70abc9b2925e617a2b8416487e1fad8f8972de2eedb1a4a4f01936e2925fa87a3944662286e0e78fda765413008669df04546ab6f46c9df45bae13ed49cae7e21f0f5eca237cd22b3786c8a0f37c853e159e1dbf689ff40d2033f08dbce636571cf125e3fba8902e7ae93ebd93f693f45f0d090b1cde73a5154a44c4958c8a02fc278fb99c74b23e956fddf98c5f7e2b9873dfa45789c8b1287afcd9e5b1946cac387f017b1ae48f38ef54194c7cdf796d9167bcd255d91c0163da",
+      "https://job-logs.eascdn.net/production/2a5a0ab6-3978-4d13-aeec-7c4b9493ed13/1774695626838-5de5f03a-138e-41a9-b96e-a4ebd68db1a3.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260328%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260328T121956Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=52d839fe662a1c3014a07112c88be75f4946a83fb1798ddad73ec62f96ab6ac90ff6f80e35c587ac5ce3be935863d76230496be0acf79e77ce95ea88c99411cd5090f3941646fc3b9e81c29d9e124f69a3b1a41ea272d5662416faa1bdcb42c2de2a12fbcc58bd29f56ea7996c44a4717fad85e714270f90c547f5cff607a7d787ab22610224d353cec637aff8e0d9d9c7437f77315c827e5268a1c41b8307c843c039d635f1a98564c7cbac9f14a5f107007d60f74732bb0890be8e2ccfb4735ab145d7212e3680355e8a8e495b2f2269a63aa0c8da389b0f7850604d3bb32452c8b103d6a18b1955794ec08beb7c60f18d0ef455b3e94860f1f0401f6120dd",
+      "https://job-logs.eascdn.net/production/2a5a0ab6-3978-4d13-aeec-7c4b9493ed13/1774695627089-00ff9c11-00ee-4a38-9bb4-0b7c14c5dba9.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260328%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260328T121956Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=44693c8885f68d227d0dde8967814933ab1c4297168a84b901d81eb115b3eb5099be43c28d97db3459d2e185283c91016cf23d1fb433b559ac60922c76a9105303f09b05f15e12950b61e9e8e5aa1e03ab71310f731ba1d487c519d85210d133054f88127f00ad2af2fb2083f04e1da4de8cf8bdb407f65322b76b431d79e795ee70a40946cc10058d1840b22eb5e8fd2a5199d4c55a44a352c9871aed503b06a9f245a8a791eaa3b0e1eefa55f81c5e41931ad46882370679864913dc426b958424e816aa1c25d299bc1673701c459954e4c557c2b30df3dcae2d6a06c8caee44a5ae01088deafe009eace6c725c2f8aecd5e391afdd2e83964205bd379dac7",
+      "https://job-logs.eascdn.net/production/2a5a0ab6-3978-4d13-aeec-7c4b9493ed13/1774695627251-34b61ad1-6851-4e58-a597-86c7ee664b45.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260328%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260328T121956Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=c11c556f86a85628e5059feb1938a23d987c152dd612d17c55fea45ac500a42bf539bc78c96ffc18c704e69dc2ae88712d7f2f911c908afc3c9709dbd80904fc83d3ecbc5e3ef85679b831af3621fa75195a5e6b79edbb04436549b9ccd5173606f9a47db534a8d33ee57237eedf0de07cecd5b791c47864421f0cccd5a4a6c6d905d9d43f51ec324da8b230b58c9732c5b7c0cabdb8235acb2a72d7073bcd3a9baeeb0b9d3b02e114607f63fd7f14e7a52b43db62be8d79d8485b717b22d4c5b924288de2d07cd4eacb3893a150f52560d8f5e70f9b251463c4be94d245c175ca03c92721c7c8f6fa8821cfdb08c5b814eb66bcd5494c96adf0b524b11fee91"
+    ],
+    "project": {
+      "id": "552fb525-0221-48a2-a39e-4db4324800fd",
+      "name": "anti-shorts",
+      "slug": "anti-shorts",
+      "ownerAccount": {
+        "id": "8ee03a18-3314-49cc-8ee2-cc164e0bde4e",
+        "name": "almansikder"
+      }
+    },
+    "distribution": "INTERNAL",
+    "buildProfile": "preview",
+    "sdkVersion": "54.0.0",
+    "appVersion": "2.0.0",
+    "appBuildVersion": "1",
+    "gitCommitHash": "3a3ac9e4f84a9d1094d2d6465d78a756c2854eae",
+    "gitCommitMessage": "fix(android): replace corrupted ic_calculator_foreground.png with valid PNG to fix AAPT2 error",
+    "priority": "NORMAL",
+    "createdAt": "2026-03-28T11:00:19.689Z",
+    "updatedAt": "2026-03-28T11:13:31.064Z",
+    "completedAt": "2026-03-28T11:13:24.521Z",
+    "expirationDate": "2026-04-11T11:00:19.733Z",
+    "isForIosSimulator": false,
+    "metrics": {
+      "buildWaitTime": 163,
+      "buildQueueTime": 46532,
+      "buildDuration": 737757
+    }
+  }
+]

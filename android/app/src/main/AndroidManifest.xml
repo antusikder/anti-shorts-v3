@@ -50,19 +50,5 @@
       </intent-filter>
     </activity>
 
-    <!-- Calculator Disguise Alias -->
-    <activity-alias
-        android:name="com.antishorts.shield.CalculatorActivityAlias"
-        android:targetActivity="com.antishorts.shield.MainActivity"
-        android:label="Calculator"
-        android:icon="@mipmap/ic_calculator"
-        android:roundIcon="@mipmap/ic_calculator_round"
-        android:enabled="false"
-        android:exported="true">
-      <intent-filter>
-        <action android:name="android.intent.action.MAIN" />
-        <category android:name="android.intent.category.LAUNCHER" />
-      </intent-filter>
-    </activity-alias>
   </application>
 </manifest>
