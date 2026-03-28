@@ -46,6 +46,7 @@ class AntiShortsService : AccessibilityService() {
         const val PREF_SCAN_INTERVAL    = "scan_interval_ms"
         const val PREF_FEED_MODE        = "feed_mode"   // "off"|"knowledge"|"study"|"productive"
         const val PREF_YT_SUBS_ONLY     = "yt_subs_only"
+        const val PREF_DETOX_END_TIME   = "detox_end_time"
 
         // Block / strict mode
         const val PREF_BLOCK_ACTIVE     = "block_active"
@@ -152,7 +153,9 @@ class AntiShortsService : AccessibilityService() {
             "com.google.android.youtube:id/close_button",
             "com.google.android.youtube:id/dismiss_button",
             "com.google.android.youtube:id/skip_ad_button_compact",
-            "com.google.android.youtube:id/ad_close_button"
+            "com.google.android.youtube:id/ad_close_button",
+            "com.google.android.youtube:id/ad_presenter_overlay",
+            "com.google.android.youtube:id/companion_ad_container"
         )
 
         val MENU_BUTTON_KEYWORDS = setOf("more", "option", "menu", "overflow")
@@ -303,12 +306,6 @@ class AntiShortsService : AccessibilityService() {
         // Priority 5: Subscribed Only Nudge
         if (prefs.getBoolean(PREF_YT_SUBS_ONLY, false)) {
             handleYtSubsOnly(root)
-        }
-
-        // Priority 6: Algorithmic Nudge (Like long-form content)
-        val feedMode = prefs.getString(PREF_FEED_MODE, "off")
-        if (feedMode != "off") {
-            handleAlgorithmicNudge(root)
         }
     }
 
@@ -469,24 +466,12 @@ class AntiShortsService : AccessibilityService() {
     }
 
     private fun handleAlgorithmicNudge(root: AccessibilityNodeInfo) {
-        val now = System.currentTimeMillis()
-        if (now - lastFeedNudgeTime < FEED_NUDGE_MIN_GAP_MS) return
+        // Removed in v3.2 due to coordinate overlap / fast-forward bug
+    }
 
-        // 1. Differentiate: if we are in a video player (not shorts)
-        // Video player often has "com.google.android.youtube:id/player_view"
-        val player = root.findAccessibilityNodeInfosByViewId("com.google.android.youtube:id/player_view").firstOrNull()
-        if (player != null && player.isVisibleToUser) {
-            // Check if it's NOT a short (we already back-out from shorts player)
-            // Look for "Like" button in the player controls
-            val likeBtn = root.findAccessibilityNodeInfosByViewId("com.google.android.youtube:id/like_button").firstOrNull()
-            if (likeBtn != null && likeBtn.isVisibleToUser && !likeBtn.isSelected) {
-                Log.d(TAG, "Algorithm Nudge: Liking long-form content")
-                likeBtn.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                lastFeedNudgeTime = now
-            }
-            safeRecycle(likeBtn)
-        }
-        safeRecycle(player)
+    private fun isDetoxActive(): Boolean {
+        val endTime = prefs.getLong(PREF_DETOX_END_TIME, 0L)
+        return endTime > System.currentTimeMillis()
     }
 
     // ═══════════════════════════════════════════════════════════════════════

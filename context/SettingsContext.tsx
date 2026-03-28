@@ -50,6 +50,7 @@ export interface Settings {
     isDisguised: boolean;
     recoveryEmail: string;
   };
+  detoxEndTime: number;
   stats: {
     shortsShieldedToday: number;
     reelsRejectedToday: number;
@@ -115,6 +116,7 @@ const defaultSettings: Settings = {
     totalAdsRemoved: 0,
     lastResetDate: new Date().toDateString(),
   },
+  detoxEndTime: 0,
 };
 
 const STORAGE_KEY = "@productive:settings_v3";
@@ -135,6 +137,7 @@ interface SettingsContextType {
   setServiceEnabled: (enabled: boolean) => void;
   updatePrivacy: (key: keyof Settings["privacy"], value: any) => void;
   incrementStat: (stat: "shorts" | "reels" | "ads") => void;
+  startDetox: (minutes: number) => void;
   isLoaded: boolean;
 }
 
@@ -179,6 +182,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           privacy: { ...defaultSettings.privacy, ...parsed.privacy },
           stats: { ...defaultSettings.stats, ...parsed.stats },
           feedMode: parsed.feedMode ?? "off",
+          detoxEndTime: parsed.detoxEndTime ?? 0,
         };
         setSettings(merged);
       }
@@ -214,8 +218,10 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       bedtimeStartHour: s.bedtime.startHour,
       bedtimeStartMin: s.bedtime.startMin,
       bedtimeEndHour: s.bedtime.endHour,
+      bedtimeEndHour: s.bedtime.endHour,
       bedtimeEndMin: s.bedtime.endMin,
       ytSubsOnly: s.youtube.subscribedOnly,
+      detoxEndTime: s.detoxEndTime,
     });
   };
 
@@ -335,6 +341,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         setServiceEnabled,
         updatePrivacy,
         incrementStat,
+        startDetox,
         isLoaded,
       }}
     >
