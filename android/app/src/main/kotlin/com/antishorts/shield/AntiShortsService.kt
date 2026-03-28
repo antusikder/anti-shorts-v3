@@ -178,6 +178,7 @@ class AntiShortsService : AccessibilityService() {
 
     // Feed mode nudge throttle
     private var lastFeedNudgeTime = 0L
+    private var lastScanTime = 0L // Debounce for scrolling
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -195,7 +196,22 @@ class AntiShortsService : AccessibilityService() {
             if (now - lastCheckTime < interval) return
             lastCheckTime = now
 
+            // 1. Dopamine Detox Check (v3.2)
+            if (isDetoxActive()) {
+                if (getBlockList().contains(pkg)) {
+                    Log.d(TAG, "Detox Active: Blocking $pkg")
+                    performGlobalAction(GLOBAL_ACTION_HOME)
+                    return
+                }
+            }
+
             val eventType = event.eventType
+
+            // 2. Performance: Debounce scrolling events to reduce CPU heat & lag
+            if (eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED) {
+                if (now - lastScanTime < 250L) return
+                lastScanTime = now
+            }
 
             // Battery optimization: for non-YouTube apps, only react to window state changes
             if (pkg != PKG_YOUTUBE && eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) return
@@ -700,9 +716,8 @@ class AntiShortsService : AccessibilityService() {
         if (!ytEnabled && !fbEnabled && !igEnabled && !ttEnabled) return
 
         val now = System.currentTimeMillis()
-        if (now - lastBackPressTime < 1000L) return
+        if (now - lastBackPressTime < 1500L) return
 
-        // 1. Check for specific text keywords in the page content (fallback)
         val targets = buildList {
             if (ytEnabled) { add("youtube.com/shorts"); add("youtu.be/shorts") }
             if (fbEnabled) { add("facebook.com/reel"); add("fb.watch") }
@@ -710,39 +725,55 @@ class AntiShortsService : AccessibilityService() {
             if (ttEnabled) { add("tiktok.com") }
         }
 
+        // Try fuzzy-matching the URL bar first (covers all browsers)
+        val urlBar = findUrlBarNodeRecursive(root, 0)
+        if (urlBar != null) {
+            val urlTxt = urlBar.text?.toString()?.lowercase(Locale.ROOT) ?: ""
+            if (targets.any { urlTxt.contains(it) }) {
+                Log.d(TAG, "Browser Blocked (URL): $urlTxt")
+                lastBackPressTime = now
+                performGlobalAction(GLOBAL_ACTION_BACK)
+                safeRecycle(urlBar)
+                return
+            }
+            safeRecycle(urlBar)
+        }
+
+        // Fallback: Text search in content
         for (target in targets) {
             val nodes = root.findAccessibilityNodeInfosByText(target)
             if (nodes.isNotEmpty()) {
                 val visible = nodes.any { it.isVisibleToUser }
                 nodes.forEach { safeRecycle(it) }
                 if (visible) {
-                    Log.d(TAG, "Browser content block: $target")
+                    Log.d(TAG, "Browser Blocked (Content): $target")
                     lastBackPressTime = now
                     performGlobalAction(GLOBAL_ACTION_BACK)
                     return
                 }
             }
         }
+    }
 
-        // 2. Check the URL bar specifically (much more reliable)
-        // Chrome URL bar ID is often "com.android.chrome:id/url_bar"
-        val urlNodes = root.findAccessibilityNodeInfosByViewId("${currentPkg}:id/url_bar")
-            .ifEmpty { root.findAccessibilityNodeInfosByViewId("${currentPkg}:id/url_edit_text") }
-            .ifEmpty { root.findAccessibilityNodeInfosByViewId("${currentPkg}:id/location_bar") }
-
-        if (urlNodes.isNotEmpty()) {
-            for (node in urlNodes) {
-                val urlTxt = node.text?.toString()?.lowercase() ?: ""
-                if (targets.any { urlTxt.contains(it) }) {
-                    Log.d(TAG, "Browser URL block: $urlTxt")
-                    lastBackPressTime = now
-                    performGlobalAction(GLOBAL_ACTION_BACK)
-                    urlNodes.forEach { safeRecycle(it) }
-                    return
-                }
-                safeRecycle(node)
+    private fun findUrlBarNodeRecursive(node: AccessibilityNodeInfo, depth: Int): AccessibilityNodeInfo? {
+        if (depth > 15) return null
+        val id = node.viewIdResourceName?.lowercase(Locale.ROOT) ?: ""
+        val desc = node.contentDescription?.toString()?.lowercase(Locale.ROOT) ?: ""
+        
+        if (id.contains("url") || id.contains("location") || id.contains("address") ||
+            desc.contains("url") || desc.contains("address")) {
+            if (node.isEditable || node.className?.contains("EditText") == true || node.text != null) {
+                return node
             }
         }
+
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            val found = findUrlBarNodeRecursive(child, depth + 1)
+            if (found != null) return found
+            safeRecycle(child)
+        }
+        return null
     }
 
     // ═══════════════════════════════════════════════════════════════════════

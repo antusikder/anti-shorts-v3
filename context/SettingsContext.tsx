@@ -218,7 +218,6 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       bedtimeStartHour: s.bedtime.startHour,
       bedtimeStartMin: s.bedtime.startMin,
       bedtimeEndHour: s.bedtime.endHour,
-      bedtimeEndHour: s.bedtime.endHour,
       bedtimeEndMin: s.bedtime.endMin,
       ytSubsOnly: s.youtube.subscribedOnly,
       detoxEndTime: s.detoxEndTime,
@@ -301,6 +300,12 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const updatePrivacy = useCallback(
     (key: keyof Settings["privacy"], value: any) =>
       update((p) => ({ ...p, privacy: { ...p.privacy, [key]: value } })),
+    [update]
+  );
+
+  const startDetox = useCallback(
+    (minutes: number) =>
+      update((p) => ({ ...p, detoxEndTime: Date.now() + minutes * 60000 })),
     [update]
   );
 

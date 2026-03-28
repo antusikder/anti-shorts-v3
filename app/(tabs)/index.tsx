@@ -82,6 +82,66 @@ const FEED_MODES: { id: FeedMode; label: string; emoji: string; desc: string }[]
   { id: "productive", label: "Productive", emoji: "⚡", desc: "Tech, business & how-to content" },
 ];
 
+// ─── Dopamine Detox Logic ─────────────────────────────────────────────────────
+
+function DopamineDetoxCard({ C }: { C: any }) {
+  const { settings, startDetox } = useSettings();
+  const [timeLeft, setTimeLeft] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = Date.now();
+      const diff = Math.max(0, settings.detoxEndTime - now);
+      setTimeLeft(diff);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [settings.detoxEndTime]);
+
+  const isActive = timeLeft > 0;
+  const minutes = Math.floor(timeLeft / 60000);
+  const seconds = Math.floor((timeLeft % 60000) / 1000);
+
+  return (
+    <Card C={C} style={{ borderColor: isActive ? C.amber : C.border }}>
+      <SectionHeader 
+        C={C} 
+        icon={<MaterialCommunityIcons name="timer-sand" size={18} color={isActive ? C.amber : C.info} />} 
+        title="Dopamine Detox" 
+        subtitle={isActive ? "Restricting digital stimulants..." : "Lock social media for a deep focus session"} 
+      />
+      
+      {isActive ? (
+        <View style={{ alignItems: "center", paddingVertical: 10 }}>
+          <Text style={{ fontSize: 32, fontFamily: "Inter_700Bold", color: C.amber }}>
+            {minutes}:{seconds < 10 ? `0${seconds}` : seconds}
+          </Text>
+          <Text style={{ fontSize: 12, fontFamily: "Inter_400Regular", color: C.textMuted, marginTop: 4 }}>
+            Social media is locked. Breathe and stay focused.
+          </Text>
+        </View>
+      ) : (
+        <View>
+          <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
+            {[5, 10, 20].map((mins) => (
+              <TouchableOpacity
+                key={mins}
+                activeOpacity={0.8}
+                onPress={() => { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); startDetox(mins); }}
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 12, backgroundColor: C.backgroundElevated, alignItems: "center", borderWidth: 1, borderColor: C.border }}
+              >
+                <Text style={{ fontSize: 14, fontFamily: "Inter_700Bold", color: C.text }}>{mins}m</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: C.textMuted, textAlign: "center" }}>
+            Locked apps: YT, FB, Insta, TikTok, Chrome
+          </Text>
+        </View>
+      )}
+    </Card>
+  );
+}
+
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 
 export default function ShieldScreen() {
@@ -301,6 +361,11 @@ export default function ShieldScreen() {
             })}
           </View>
         </Card>
+
+        <View style={{ height: 12 }} />
+
+        {/* ── Dopamine Detox ── */}
+        <DopamineDetoxCard C={C} />
 
         <View style={{ height: 12 }} />
 
