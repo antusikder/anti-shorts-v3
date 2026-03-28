@@ -60,6 +60,24 @@ export interface Settings {
     totalAdsRemoved: number;
     lastResetDate: string;
   };
+  workout: {
+    height: number;
+    weight: number;
+    bmi: number;
+    age: number;
+    activityLevel: "sedentary" | "light" | "moderate" | "active" | "athlete";
+    gender: "male" | "female";
+  };
+  nutrition: {
+    proteinGoal: number;
+    mineralGoal: string;
+  };
+  usage: {
+    screenTimeToday: number;
+    screenTimeYesterday: number;
+    rewardPoints: number;
+    streakDays: number;
+  };
 }
 
 const SCAN_SPEED_MAP: Record<ScanSpeed, number> = {
@@ -116,6 +134,24 @@ const defaultSettings: Settings = {
     totalAdsRemoved: 0,
     lastResetDate: new Date().toDateString(),
   },
+  workout: {
+    height: 170,
+    weight: 70,
+    bmi: 24.2,
+    age: 25,
+    activityLevel: "moderate",
+    gender: "male",
+  },
+  nutrition: {
+    proteinGoal: 0,
+    mineralGoal: "General Health",
+  },
+  usage: {
+    screenTimeToday: 0,
+    screenTimeYesterday: 0,
+    rewardPoints: 0,
+    streakDays: 0,
+  },
   detoxEndTime: 0,
 };
 
@@ -138,6 +174,10 @@ interface SettingsContextType {
   updatePrivacy: (key: keyof Settings["privacy"], value: any) => void;
   incrementStat: (stat: "shorts" | "reels" | "ads") => void;
   startDetox: (minutes: number) => void;
+  updateWorkout: (data: Partial<Settings["workout"]>) => void;
+  updateNutrition: (data: Partial<Settings["nutrition"]>) => void;
+  updateUsage: (data: Partial<Settings["usage"]>) => void;
+  resetStats: () => void;
   isLoaded: boolean;
 }
 
@@ -181,6 +221,9 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           bedtime: { ...defaultSettings.bedtime, ...parsed.bedtime },
           privacy: { ...defaultSettings.privacy, ...parsed.privacy },
           stats: { ...defaultSettings.stats, ...parsed.stats },
+          workout: { ...defaultSettings.workout, ...parsed.workout },
+          nutrition: { ...defaultSettings.nutrition, ...parsed.nutrition },
+          usage: { ...defaultSettings.usage, ...parsed.usage },
           feedMode: parsed.feedMode ?? "off",
           detoxEndTime: parsed.detoxEndTime ?? 0,
         };
@@ -309,6 +352,37 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     [update]
   );
 
+  const updateWorkout = useCallback(
+    (data: Partial<Settings["workout"]>) =>
+      update((p) => ({ ...p, workout: { ...p.workout, ...data } })),
+    [update]
+  );
+
+  const updateNutrition = useCallback(
+    (data: Partial<Settings["nutrition"]>) =>
+      update((p) => ({ ...p, nutrition: { ...p.nutrition, ...data } })),
+    [update]
+  );
+
+  const updateUsage = useCallback(
+    (data: Partial<Settings["usage"]>) =>
+      update((p) => ({ ...p, usage: { ...p.usage, ...data } })),
+    [update]
+  );
+
+  const resetStats = useCallback(() => {
+    update((p) => ({
+      ...p,
+      stats: {
+        ...defaultSettings.stats,
+        lastResetDate: new Date().toDateString(),
+      },
+      usage: {
+        ...defaultSettings.usage,
+      },
+    }));
+  }, [update]);
+
   const incrementStat = useCallback(
     (stat: "shorts" | "reels" | "ads") =>
       update((p) => {
@@ -347,6 +421,10 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         updatePrivacy,
         incrementStat,
         startDetox,
+        updateWorkout,
+        updateNutrition,
+        updateUsage,
+        resetStats,
         isLoaded,
       }}
     >

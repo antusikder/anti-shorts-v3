@@ -284,7 +284,24 @@ class AntiShortsService : AccessibilityService() {
 
         // Priority 1: Skip active video ad (view-ID first, then text)
         if (prefs.getBoolean(PREF_SKIP_ADS, true)) {
-            if (skipAdByViewId(root)) return
+            // Check all known ad and overlay IDs
+            val allAdIds = YT_SKIP_AD_IDS + STICKY_AD_IDS
+            for (id in allAdIds) {
+                val nodes = root.findAccessibilityNodeInfosByViewId(id)
+                if (nodes.isNotEmpty()) {
+                    val target = nodes.firstOrNull { it.isVisibleToUser && it.isEnabled }
+                    if (target != null) {
+                        val clickable = if (target.isClickable) target else findClickableParent(target)
+                        if (clickable != null) {
+                            clickable.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                            Log.d(TAG, "YouTube Ad/Overlay dismissed via ID: $id")
+                            nodes.forEach { safeRecycle(it) }
+                            return // Early exit if we dismissed something
+                        }
+                    }
+                    nodes.forEach { safeRecycle(it) }
+                }
+            }
             if (skipAdByText(root)) return
         }
 

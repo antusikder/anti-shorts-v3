@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "Fresh Mind",
+    "name": "Fresh Mind Elite",
     "slug": "anti-shorts",
-    "version": "3.2.0",
+    "version": "4.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "productive",

@@ -35,10 +35,23 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Shield",
+          title: "Dashboard",
           tabBarIcon: ({ color, focused }) => (
             <MaterialCommunityIcons
-              name={focused ? "shield-check" : "shield-check-outline"}
+              name={focused ? "view-dashboard" : "view-dashboard-outline"}
+              size={24}
+              color={color}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="routine"
+        options={{
+          title: "Routine",
+          tabBarIcon: ({ color, focused }) => (
+            <MaterialCommunityIcons
+              name={focused ? "calendar-clock" : "calendar-clock-outline"}
               size={26}
               color={color}
             />
@@ -46,38 +59,28 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="planner"
+        name="workout"
         options={{
-          title: "Planner",
-          tabBarIcon: ({ color }) => (
-            <Feather name="check-square" size={24} color={color} />
+          title: "Workout",
+          tabBarIcon: ({ color, focused }) => (
+            <MaterialCommunityIcons
+              name={focused ? "arm-flex" : "arm-flex-outline"}
+              size={26}
+              color={color}
+            />
           ),
         }}
       />
       <Tabs.Screen
-        name="schedule"
+        name="access"
         options={{
-          title: "Schedule",
-          tabBarIcon: ({ color }) => (
-            <Feather name="clock" size={24} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="bedtime"
-        options={{
-          title: "Bedtime",
-          tabBarIcon: ({ color }) => (
-            <MaterialCommunityIcons name="weather-night" size={26} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="settings"
-        options={{
-          title: "Settings",
-          tabBarIcon: ({ color }) => (
-            <Feather name="settings" size={24} color={color} />
+          title: "Access",
+          tabBarIcon: ({ color, focused }) => (
+            <MaterialCommunityIcons
+              name={focused ? "shield-key" : "shield-key-outline"}
+              size={26}
+              color={color}
+            />
           ),
         }}
       />
