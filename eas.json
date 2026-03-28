@@ -11,7 +11,7 @@
       }
     },
     "preview": {
-      "node": "20.x",
+      "node": "20.10.0",
       "distribution": "internal",
       "android": {
         "buildType": "apk"
