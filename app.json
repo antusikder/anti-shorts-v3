@@ -44,11 +44,7 @@
       "typedRoutes": true
     },
     "extra": {
-      "router": {},
-      "eas": {
-        "projectId": "552fb525-0221-48a2-a39e-4db4324800fd"
-      }
-    },
-    "owner": "almansikder"
+      "router": {}
+    }
   }
 }
