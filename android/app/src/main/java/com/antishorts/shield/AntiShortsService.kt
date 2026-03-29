@@ -69,8 +69,7 @@ class AntiShortsService : AccessibilityService() {
         val YT_SHORTS_SHELF_TEXT = listOf("Shorts", "YouTube Shorts", "Short videos")
         val YT_SHORTS_SHELF_IDS = listOf(
             "com.google.android.youtube:id/shorts_shelf_container",
-            "com.google.android.youtube:id/reel_shelf_container",
-            "com.google.android.youtube:id/items_container"
+            "com.google.android.youtube:id/reel_shelf_container"
         )
 
         val YT_FEWER_SHORTS_TEXT = listOf(
@@ -233,11 +232,17 @@ class AntiShortsService : AccessibilityService() {
             if (shelves.isNotEmpty()) {
                 for (shelf in shelves) {
                     if (shelf.isVisibleToUser) {
-                        val menuBtn = findMenuButtonInside(shelf)
-                        if (menuBtn != null) {
-                            openMenuAndDismissIfShort(menuBtn, YT_FEWER_SHORTS_TEXT, "YT Shorts Shelf")
-                            shelves.forEach { safeRecycle(it) }
-                            return
+                        // REFINEMENT: Ensure the shelf actually says "Shorts" or similar
+                        val hasShortsText = shelf.findAccessibilityNodeInfosByText("Shorts").isNotEmpty() 
+                            || shelf.findAccessibilityNodeInfosByText("Short videos").isNotEmpty()
+                        
+                        if (hasShortsText) {
+                            val menuBtn = findMenuButtonInside(shelf)
+                            if (menuBtn != null) {
+                                openMenuAndDismissIfShort(menuBtn, YT_FEWER_SHORTS_TEXT, "YT Shorts Shelf")
+                                shelves.forEach { safeRecycle(it) }
+                                return
+                            }
                         }
                     }
                     safeRecycle(shelf)
