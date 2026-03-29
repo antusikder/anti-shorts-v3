@@ -106,8 +106,18 @@ export default function WorkoutScreen() {
     return { label: "Obese", color: "#FF5252" };
   }, [bmi]);
 
-  // Nutrition Logic
-  const dailyProtein = settings.workout.weight * 1.5; // Basic multiplier
+  // BMR & Nutrition Logic
+  const age = settings.workout.age || 25;
+  const gender = settings.workout.gender || "male";
+  
+  // Mifflin-St Jeor Equation
+  const bmr = gender === "male" 
+    ? (10 * settings.workout.weight) + (6.25 * settings.workout.height) - (5 * age) + 5
+    : (10 * settings.workout.weight) + (6.25 * settings.workout.height) - (5 * age) - 161;
+
+  const dailyProtein = gender === "male" 
+    ? settings.workout.weight * 1.8 
+    : settings.workout.weight * 1.5;
 
   return (
     <LinearGradient colors={["#0D0B1E", "#05050A"]} style={{ flex: 1 }}>
@@ -163,6 +173,34 @@ export default function WorkoutScreen() {
                       />
                    </View>
                 </View>
+                <View style={styles.inputGrid}>
+                   <View style={styles.inputGroup}>
+                      <Text style={styles.inputLabel}>Age</Text>
+                      <TextInput
+                        value={String(settings.workout.age)}
+                        onChangeText={(v) => updateWorkout({ age: parseInt(v) || 0 })}
+                        keyboardType="number-pad"
+                        style={styles.numericInput}
+                      />
+                   </View>
+                   <View style={styles.inputGroup}>
+                      <Text style={styles.inputLabel}>Gender</Text>
+                      <View style={styles.genderToggle}>
+                         <TouchableOpacity 
+                           onPress={() => updateWorkout({ gender: "male" })}
+                           style={[styles.genderBtn, settings.workout.gender === "male" && styles.genderBtnActive]}
+                         >
+                            <Text style={[styles.genderBtnText, settings.workout.gender === "male" && { color: "#FFF" }]}>M</Text>
+                         </TouchableOpacity>
+                         <TouchableOpacity 
+                           onPress={() => updateWorkout({ gender: "female" })}
+                           style={[styles.genderBtn, settings.workout.gender === "female" && styles.genderBtnActive]}
+                         >
+                            <Text style={[styles.genderBtnText, settings.workout.gender === "female" && { color: "#FFF" }]}>F</Text>
+                         </TouchableOpacity>
+                      </View>
+                   </View>
+                </View>
              </Card>
 
              <View style={{ height: 16 }} />
@@ -212,12 +250,22 @@ export default function WorkoutScreen() {
              <Card C={C}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                    <View>
+                      <Text style={styles.metricLabel}>Basal Metabolic Rate</Text>
+                      <Text style={[styles.metricValue, { color: C.amber }]}>{Math.round(bmr)} kcal</Text>
+                   </View>
+                   <MaterialCommunityIcons name="lightning-bolt" size={40} color={C.amber} />
+                </View>
+                <View style={{ height: 16 }} />
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                   <View>
                       <Text style={styles.metricLabel}>Target Protein</Text>
                       <Text style={[styles.metricValue, { color: C.amber }]}>{Math.round(dailyProtein)}g</Text>
                    </View>
                    <MaterialCommunityIcons name="food-apple" size={40} color={C.amber} />
                 </View>
-                <Text style={styles.nutritionDesc}>Suggested based on your weight and "Moderate" activity level.</Text>
+                <Text style={styles.nutritionDesc}>
+                   Bio-metrics synced: {settings.workout.gender} | age {settings.workout.age} | weight {settings.workout.weight}kg
+                </Text>
              </Card>
 
              <View style={{ height: 16 }} />
@@ -260,6 +308,10 @@ const styles = StyleSheet.create({
   inputGroup: { flex: 1 },
   inputLabel: { fontSize: 11, fontFamily: 'Inter_400Regular', color: '#A0A0B0', marginBottom: 6 },
   numericInput: { height: 44, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, color: '#FFFFFF', paddingHorizontal: 12, fontSize: 16, fontWeight: '700' },
+  genderToggle: { flexDirection: 'row', gap: 8, height: 44 },
+  genderBtn: { flex: 1, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'transparent' },
+  genderBtnActive: { backgroundColor: 'rgba(255,176,0,0.2)', borderColor: 'rgba(255,176,0,0.5)' },
+  genderBtnText: { fontSize: 14, fontFamily: 'Inter_700Bold', color: '#A0A0B0' },
   muscleBtn: { alignItems: 'center', marginRight: 20 },
   muscleIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
   muscleName: { fontSize: 10, fontFamily: 'Inter_600SemiBold', color: '#FFFFFF' },

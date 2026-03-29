@@ -109,13 +109,10 @@ class AntiShortsService : AccessibilityService() {
 
         // Text shown ONLY in Shorts shelf 3-dot menu (1-2 items). NOT in general video menus.
         val YT_FEWER_SHORTS_TEXT = listOf(
-            "Don't recommend Shorts",
             "Fewer Shorts",
             "Show fewer Shorts",
             "Hide Shorts Shelf",
-            "Not interested in Shorts",
-            "Stop recommending Shorts",
-            "Not interested"
+            "Stop recommending Shorts"
         )
 
         val FB_REELS_TEXT = listOf(
@@ -127,9 +124,9 @@ class AntiShortsService : AccessibilityService() {
 
         val FB_FEWER_REELS_TEXT = listOf(
             "Hide Reel", "Hide Reels", "Show less",
-            "Not interested", "Show fewer Reels",
+            "Show fewer Reels",
             "See fewer Reels", "Don't show Reels",
-            "Not interested in Reels", "Snooze"
+            "Snooze"
         )
 
         // YouTube ad skip: try view ID first, then these text fallbacks
@@ -147,7 +144,7 @@ class AntiShortsService : AccessibilityService() {
         val AD_CENTER_TEXTS = listOf("Ad ·", "Ad •", "Sponsored", "About this ad", "Ad Center")
         val AD_DISMISS_TEXTS = listOf(
             "Dismiss", "Hide ad", "Stop seeing this ad",
-            "Not interested", "Report ad", "Close"
+            "Report ad", "Close"
         )
 
         val STICKY_AD_IDS = listOf(
