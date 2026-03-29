@@ -197,21 +197,21 @@ class AntiShortsService : AccessibilityService() {
     }
 
     private fun removeFeedRows(rootNode: AccessibilityNodeInfo, triggerWords: List<String>) {
-        val nodes = rootNode.findAccessibilityNodeInfosByText(triggerWords[0])
-        for (node in nodes) {
-            var parent = node.parent
-            // Ascend hierarchy to find the scrollable container's child (the whole row)
-            var depth = 0
-            while (parent != null && depth < 4) {
-                if (parent.className?.toString()?.contains("RecyclerView") == true) {
-                    // Perform a swipe to scroll past it, or click dismiss if available
-                    performSwipeUp()
-                    break
+        for (word in triggerWords) {
+            val nodes = rootNode.findAccessibilityNodeInfosByText(word)
+            for (node in nodes) {
+                var parent = node.parent
+                var depth = 0
+                while (parent != null && depth < 4) {
+                    if (parent.className?.toString()?.contains("RecyclerView") == true) {
+                        performSwipeUp()
+                        break
+                    }
+                    parent = parent.parent
+                    depth++
                 }
-                parent = parent.parent
-                depth++
+                node.recycle()
             }
-            node.recycle()
         }
     }
 
@@ -267,5 +267,17 @@ class AntiShortsService : AccessibilityService() {
 
     override fun onInterrupt() {
         Log.d(TAG, "Neural Scanner Interrupted")
+    }
+
+    companion object {
+        const val PREFS_NAME = "com.antishorts.shield.PREFERENCE_FILE_KEY"
+        const val PREF_YT_ENABLED = "youtube_enabled"
+        const val PREF_YT_SHORTS = "youtube_removeShorts"
+        const val PREF_YT_AUTO_BACK = "youtubeAutoBack"
+        const val PREF_SYSTEM_ENABLED = "systemEnabled"
+        const val PREF_SKIP_ADS = "skipAds"
+        const val PREF_SCAN_INTERVAL = "scanIntervalMs"
+        const val PREF_BLOCK_ACTIVE = "blockActive"
+        const val PREF_BLOCKED_APPS = "blockedApps"
     }
 }

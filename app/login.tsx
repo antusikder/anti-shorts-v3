@@ -135,6 +135,17 @@ export default function LoginScreen() {
             )}
           </TouchableOpacity>
 
+          <TouchableOpacity 
+            style={styles.skipBtn} 
+            onPress={async () => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              await AsyncStorage.setItem("@productive:user_token", "skip-token");
+              router.replace("/(tabs)");
+            }}
+          >
+            <Text style={styles.skipBtnText}>Skip for now</Text>
+          </TouchableOpacity>
+
           <View style={styles.dividerContainer}>
             <View style={styles.dividerLine} />
             <Text style={styles.dividerText}>SECURE LOGIN</Text>
@@ -197,6 +208,8 @@ const styles = StyleSheet.create({
   },
   loginBtnDisabled: { opacity: 0.7 },
   loginBtnText: { color: "#000000", fontSize: 18, fontFamily: "Inter_700Bold" },
+  skipBtn: { marginTop: 15, alignItems: "center", paddingVertical: 10 },
+  skipBtnText: { color: "#A0A0B0", fontSize: 14, fontFamily: "Inter_500Medium", textDecorationLine: "underline" },
   dividerContainer: { flexDirection: "row", alignItems: "center", marginVertical: 35 },
   dividerLine: { flex: 1, height: 1, backgroundColor: "rgba(255,255,255,0.1)" },
   dividerText: { color: "#606070", paddingHorizontal: 15, fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 2 },
