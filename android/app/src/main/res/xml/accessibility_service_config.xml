@@ -1,11 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-  Productive Accessibility Service Configuration
-  ================================================
-  packageNames is NOT restricted here so the service can detect any app for
-  block mode / bedtime mode. YouTube and Facebook are still the only apps
-  where Shorts/Reels removal logic runs (guarded in Kotlin code).
--->
 <accessibility-service
     xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/accessibility_service_description"
