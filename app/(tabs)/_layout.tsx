@@ -46,19 +46,6 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="routine"
-        options={{
-          title: "Routine",
-          tabBarIcon: ({ color, focused }) => (
-            <MaterialCommunityIcons
-              name={focused ? "calendar-clock" : "calendar-clock-outline"}
-              size={26}
-              color={color}
-            />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="workout"
         options={{
           title: "Workout",
