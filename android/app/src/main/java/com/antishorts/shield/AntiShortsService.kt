@@ -1,350 +1,271 @@
 package com.antishorts.shield
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.AccessibilityServiceInfo
+import android.accessibilityservice.GestureDescription
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
+import android.graphics.Path
 import android.graphics.Rect
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
-import java.util.Calendar
-import java.util.Locale
 
 class AntiShortsService : AccessibilityService() {
 
-    companion object {
-        private const val TAG = "FreshMindService"
-        const val PREFS_NAME = "antishorts_prefs"
-
-        const val PREF_YT_ENABLED       = "yt_enabled"
-        const val PREF_YT_SHORTS        = "yt_remove_shorts"
-        const val PREF_YT_AUTO_BACK     = "yt_auto_back"
-        const val PREF_FB_ENABLED       = "fb_enabled"
-        const val PREF_FB_REELS         = "fb_remove_reels"
-        const val PREF_FB_AUTO_BACK     = "fb_auto_back"
-        const val PREF_IG_ENABLED       = "ig_enabled"
-        const val PREF_TT_ENABLED       = "tt_enabled"
-        const val PREF_SKIP_ADS         = "skip_ads"
-        const val PREF_SYSTEM_ENABLED   = "system_enabled"
-        const val PREF_SCAN_INTERVAL    = "scan_interval_ms"
-        const val PREF_FEED_MODE        = "feed_mode"
-        const val PREF_YT_SUBS_ONLY     = "yt_subs_only"
-        const val PREF_DETOX_END_TIME   = "detox_end_time"
-        const val PREF_BLOCK_ACTIVE     = "block_active"
-        const val PREF_BLOCKED_APPS     = "blocked_apps"
-        const val PREF_BEDTIME_ENABLED  = "bedtime_enabled"
-        const val PREF_BEDTIME_START_H  = "bedtime_start_hour"
-        const val PREF_BEDTIME_START_M  = "bedtime_start_min"
-        const val PREF_BEDTIME_END_H    = "bedtime_end_hour"
-        const val PREF_BEDTIME_END_M    = "bedtime_end_min"
-        const val PREF_SUDDEN_BLOCK     = "sudden_block_end_time"
-
-        const val PKG_YOUTUBE          = "com.google.android.youtube"
-        const val PKG_FACEBOOK         = "com.facebook.katana"
-        const val PKG_INSTAGRAM        = "com.instagram.android"
-        const val PKG_TIKTOK           = "com.zhiliaoapp.musically"
-
-        val BROWSER_PACKAGES = setOf(
-            "com.android.chrome", "com.brave.browser", "org.mozilla.firefox",
-            "com.opera.browser", "com.microsoft.emmx", "com.sec.android.app.sbrowser",
-            "com.kiwibrowser.browser", "com.duckduckgo.mobile.android"
-        )
-
-        const val DEFAULT_SCAN_INTERVAL = 150L
-        const val MENU_READ_DELAY_MS    = 300L
-        const val RETRY_DELAY_MS        = 80L
-
-        val YT_SHORTS_PLAYER_IDS = listOf(
-            "com.google.android.youtube:id/reel_player_view_container",
-            "com.google.android.youtube:id/shorts_container",
-            "com.google.android.youtube:id/reel_watch_player",
-            "com.google.android.youtube:id/shorts_player_container",
-            "com.google.android.youtube:id/shorts_slide_layout",
-            "com.google.android.youtube:id/reels_player_overlay",
-            "com.google.android.youtube:id/shorts_video_cell"
-        )
-
-        val YT_SHORTS_SHELF_TEXT = listOf("Shorts", "YouTube Shorts", "Short videos")
-        val YT_SHORTS_SHELF_IDS = listOf(
-            "com.google.android.youtube:id/shorts_shelf_container",
-            "com.google.android.youtube:id/reel_shelf_container"
-        )
-
-        val YT_FEWER_SHORTS_TEXT = listOf(
-            "Fewer Shorts",
-            "Show fewer Shorts",
-            "Hide Shorts Shelf",
-            "Stop recommending Shorts"
-        )
-
-        val FB_REELS_TEXT = listOf("Reel by", "Reels", "Reel •", "Watch Reel", "Reel ·", "Suggested Reels", "Featured Reels")
-        val IG_REELS_TEXT = listOf("Reels", "Reel")
-        val FB_FEWER_REELS_TEXT = listOf(
-            "Hide Reel", "Hide Reels", "Show less",
-            "Show fewer Reels", "See fewer Reels", "Don't show Reels", "Snooze"
-        )
-
-        val YT_SKIP_AD_IDS = listOf(
-            "com.google.android.youtube:id/skip_ad_button",
-            "com.google.android.youtube:id/skip_button",
-            "com.google.android.youtube:id/skip_ad_button_text"
-        )
-        val YT_SKIP_AD_TEXTS = listOf("Skip ad", "Skip ads", "Skip Ad", "Skip Ads", "Skip", "SKIP AD", "SKIP ADS")
-
-        val AD_CENTER_TEXTS = listOf("Ad ·", "Ad •", "Sponsored", "About this ad", "Ad Center")
-        val AD_DISMISS_TEXTS = listOf("Dismiss", "Hide ad", "Stop seeing this ad", "Report ad", "Close")
-
-        val STICKY_AD_IDS = listOf(
-            "com.google.android.youtube:id/close_button", "com.google.android.youtube:id/dismiss_button",
-            "com.google.android.youtube:id/skip_ad_button_compact", "com.google.android.youtube:id/ad_close_button",
-            "com.google.android.youtube:id/ad_presenter_overlay", "com.google.android.youtube:id/companion_ad_container",
-            "com.google.android.youtube:id/masthead_ad_container", "com.google.android.youtube:id/player_overlay_ads_ui_container_view"
-        )
-
-        val MENU_BUTTON_KEYWORDS = setOf("more", "option", "menu", "overflow")
-        const val SHORT_MENU_MAX_ITEMS  = 3
-    }
-
-    private val handler = Handler(Looper.getMainLooper())
-    private var lastCheckTime = 0L
+    private val TAG = "AntiShortsService"
     private lateinit var prefs: SharedPreferences
-    private var lastBackPressTime = 0L
-    private var lastScanTime = 0L
+
+    // Configuration map loaded from React Native via settings
+    private var config = mutableMapOf<String, Boolean>()
+    
+    // Core parameters
+    private var isSystemEnabled = true
+    private var suddenBlockEndTime: Long = 0L
+
+    // Throttler to prevent overwhelming the CPU
+    private var lastEventTime = 0L
+    private val EVENT_THROTTLE_MS = 300L
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        Log.d(TAG, "FreshMind Elite Service connected")
-    }
-
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        try {
-            event ?: return
-            val pkg = event.packageName?.toString() ?: return
-            val now = System.currentTimeMillis()
-            val interval = prefs.getLong(PREF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
-            if (now - lastCheckTime < interval) return
-            lastCheckTime = now
-
-            if (isDetoxActive() || isSuddenBlockActive()) {
-                if (getBlockList().contains(pkg)) {
-                    performGlobalAction(GLOBAL_ACTION_HOME)
-                    return
-                }
-            }
-
-            val eventType = event.eventType
-            if (eventType == AccessibilityEvent.TYPE_VIEW_SCROLLED) {
-                if (now - lastScanTime < 250L) return
-                lastScanTime = now
-            }
-
-            if (pkg != PKG_YOUTUBE && eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) return
-            if (eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && eventType != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) return
-
-            if (!prefs.getBoolean(PREF_SYSTEM_ENABLED, true)) return
-            if (prefs.getBoolean(PREF_BLOCK_ACTIVE, false) && getBlockedList().contains(pkg)) {
-                performGlobalAction(GLOBAL_ACTION_HOME)
-                return
-            }
-            if (prefs.getBoolean(PREF_BEDTIME_ENABLED, false) && isInBedtimeWindow() && getBlockedList().contains(pkg)) {
-                performGlobalAction(GLOBAL_ACTION_HOME)
-                return
-            }
-
-            if (BROWSER_PACKAGES.contains(pkg)) {
-                val root = rootInActiveWindow ?: return
-                try { handleBrowser(root) } finally { safeRecycle(root) }
-                return
-            }
-
-            val supported = listOf(PKG_YOUTUBE, PKG_FACEBOOK, PKG_INSTAGRAM, PKG_TIKTOK)
-            if (!supported.contains(pkg)) return
-
-            val root = rootInActiveWindow ?: return
-            try {
-                when (pkg) {
-                    PKG_YOUTUBE   -> handleYoutube(root)
-                    PKG_FACEBOOK  -> handleFacebook(root)
-                    PKG_INSTAGRAM -> handleInstagram(root)
-                    PKG_TIKTOK    -> handleTiktok(root)
-                }
-            } finally { safeRecycle(root) }
-        } catch (e: Exception) { Log.e(TAG, "Event crash: ${e.message}") }
-    }
-
-    private fun handleYoutube(root: AccessibilityNodeInfo) {
-        if (!prefs.getBoolean(PREF_YT_ENABLED, true)) return
-        if (prefs.getBoolean(PREF_SKIP_ADS, true)) {
-            val allAdIds = YT_SKIP_AD_IDS + STICKY_AD_IDS
-            for (id in allAdIds) {
-                val nodes = root.findAccessibilityNodeInfosByViewId(id)
-                if (nodes.isNotEmpty()) {
-                    val target = nodes.firstOrNull { it.isVisibleToUser && it.isEnabled }
-                    if (target != null) {
-                        val clickable = if (target.isClickable) target else findClickableParent(target)
-                        if (clickable != null) {
-                            clickable.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                            nodes.forEach { safeRecycle(it) }
-                            return
-                        }
-                    }
-                    nodes.forEach { safeRecycle(it) }
-                }
-            }
-            if (skipAdByText(root)) return
+        Log.d(TAG, "Neural Scanner Activated (v4.1)")
+        prefs = getSharedPreferences("com.antishorts.shield.PREFERENCE_FILE_KEY", Context.MODE_PRIVATE)
+        
+        val info = AccessibilityServiceInfo().apply {
+            eventTypes = AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED or 
+                         AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+            feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
+            // Extensive monitoring of core dopamine-trigger apps
+            packageNames = arrayOf("com.google.android.youtube", "com.facebook.katana")
+            notificationTimeout = 100
+            flags = AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
         }
-        if (prefs.getBoolean(PREF_YT_AUTO_BACK, true) && isShortsPlayerVisible(root)) {
-            val now = System.currentTimeMillis()
-            if (now - lastBackPressTime > 400L) {
-                lastBackPressTime = now
-                performGlobalAction(GLOBAL_ACTION_BACK)
-            }
+        this.serviceInfo = info
+        loadConfig()
+    }
+
+    private fun loadConfig() {
+        // Read native preferences populated by React Native
+        isSystemEnabled = prefs.getBoolean("systemEnabled", true)
+        suddenBlockEndTime = prefs.getLong("suddenBlockEndTime", 0L)
+        
+        config["youtube_enabled"] = prefs.getBoolean("youtube_enabled", true)
+        config["youtube_removeShorts"] = prefs.getBoolean("youtube_removeShorts", true)
+        config["skipAds"] = prefs.getBoolean("skipAds", true)
+        config["youtube_subscribedOnly"] = prefs.getBoolean("youtube_subscribedOnly", false)
+        config["facebook_enabled"] = prefs.getBoolean("facebook_enabled", true)
+        config["facebook_removeReels"] = prefs.getBoolean("facebook_removeReels", true)
+    }
+
+    override fun onAccessibilityEvent(event: AccessibilityEvent) {
+        val now = System.currentTimeMillis()
+        if (now - lastEventTime < EVENT_THROTTLE_MS) return
+        
+        loadConfig() // Fast reload mapping
+
+        // Panic Mode Check
+        if (suddenBlockEndTime > now) {
+            performGlobalAction(GLOBAL_ACTION_HOME)
+            Log.d(TAG, "Panic Mode Active: Booted user to Home")
+            lastEventTime = now
             return
         }
-        if (prefs.getBoolean(PREF_YT_SHORTS, true)) { handleYtShortsInFeed(root) }
+
+        if (!isSystemEnabled) return
+
+        val rootNode = rootInActiveWindow ?: return
+        val packageName = event.packageName?.toString() ?: ""
+
+        try {
+            when (packageName) {
+                "com.google.android.youtube" -> if (config["youtube_enabled"] == true) handleYouTube(rootNode)
+                "com.facebook.katana" -> if (config["facebook_enabled"] == true) handleFacebook(rootNode)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Neural Scan Exception: ${e.message}")
+        } finally {
+            rootNode.recycle()
+        }
+
+        lastEventTime = now
     }
 
-    private fun skipAdByText(root: AccessibilityNodeInfo): Boolean {
-        for (text in YT_SKIP_AD_TEXTS) {
-            val nodes = root.findAccessibilityNodeInfosByText(text)
-            if (nodes.isNotEmpty()) {
-                val target = nodes.firstOrNull { it.isVisibleToUser }
-                if (target != null) {
-                    val clickable = if (target.isClickable) target else findClickableParent(target)
-                    if (clickable != null) {
-                        clickable.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                        nodes.forEach { safeRecycle(it) }
-                        return true
-                    }
+    private fun handleYouTube(rootNode: AccessibilityNodeInfo) {
+        // 1. Shorts Annihilation (Heuristic + ID Based)
+        if (config["youtube_removeShorts"] == true) {
+            val isViewingShorts = recursiveFindAndDestroy(rootNode, listOf(
+                "shorts_player", // Common ID
+                "reel_recycler",
+                "reel_player"
+            ), listOf("Shorts", "Short"), detectShortsAspect = true)
+
+            if (isViewingShorts) {
+                recordStat("shortsShieldedToday")
+                performGlobalAction(GLOBAL_ACTION_HOME)
+                Log.d(TAG, "Intercepted YouTube Short - Sent to Home")
+            } else {
+                // Secondary check: Remove shorts rows from Home Feed selectively
+                removeFeedRows(rootNode, listOf("Shorts", "Reels"))
+            }
+        }
+
+        // 2. Automate Ad Skipping
+        if (config["skipAds"] == true) {
+            clickNodesByText(rootNode, listOf("Skip Ad", "Skip ads", "Skip navigation"))
+        }
+
+        // 3. Subscriptions Only (Strict Feed Control)
+        if (config["youtube_subscribedOnly"] == true) {
+            preventNonSubscriptionBrowsing(rootNode)
+        }
+    }
+
+    private fun handleFacebook(rootNode: AccessibilityNodeInfo) {
+        if (config["facebook_removeReels"] == true) {
+            val isViewingReel = recursiveFindAndDestroy(rootNode, listOf(
+                "reels_video_player",
+                "reels_viewer_video"
+            ), listOf("Reels", "Reel"), detectShortsAspect = true)
+
+            if (isViewingReel) {
+                recordStat("reelsRejectedToday")
+                performGlobalAction(GLOBAL_ACTION_HOME)
+                Log.d(TAG, "Intercepted Facebook Reel - Sent to Home")
+            } else {
+                // Remove reels containers from news feed
+                removeFeedRows(rootNode, listOf("Reels and short videos", "Reels"))
+            }
+        }
+    }
+
+    // --- Neural Heuristics Engine ---
+
+    private fun recursiveFindAndDestroy(
+        node: AccessibilityNodeInfo, 
+        targetIds: List<String>, 
+        targetTexts: List<String>, 
+        detectShortsAspect: Boolean
+    ): Boolean {
+        if (node.isDestroyed) return false
+
+        // ID Check
+        val viewId = node.viewIdResourceName ?: ""
+        if (targetIds.any { viewId.contains(it, ignoreCase = true) }) return true
+
+        // Text Check (Content Description or Text)
+        val text = node.text?.toString()?.trim() ?: ""
+        val contentDesc = node.contentDescription?.toString()?.trim() ?: ""
+        if (targetTexts.any { text.equals(it, ignoreCase = true) || contentDesc.equals(it, ignoreCase = true) }) {
+            // Confirm it's a main structural element, not just a random text view
+            if (node.className?.toString()?.contains("Button") == true || viewId.contains("tab")) {
+                return true
+            }
+        }
+
+        // Geometric Aspect Ratio Check (The ultimate short-form killer)
+        if (detectShortsAspect && (node.className == "android.widget.FrameLayout" || node.className == "android.view.ViewGroup")) {
+            val bounds = Rect()
+            node.getBoundsInScreen(bounds)
+            val h = bounds.height().toFloat()
+            val w = bounds.width().toFloat()
+            
+            // If the video container is vertically tall (aspect ratio > 1.4) AND takes up > 70% of the screen height
+            val displayMetrics = resources.displayMetrics
+            val screenHeight = displayMetrics.heightPixels.toFloat()
+            
+            if (w > 0 && h / w > 1.4f && h > screenHeight * 0.7f) {
+                // We've detected a full-screen vertical swipe video player natively.
+                return true
+            }
+        }
+
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i)
+            if (child != null) {
+                if (recursiveFindAndDestroy(child, targetIds, targetTexts, detectShortsAspect)) {
+                    child.recycle()
+                    return true
                 }
-                nodes.forEach { safeRecycle(it) }
+                child.recycle()
             }
         }
         return false
     }
 
-    private fun handleYtShortsInFeed(root: AccessibilityNodeInfo) {
-        for (id in YT_SHORTS_SHELF_IDS) {
-            val shelves = root.findAccessibilityNodeInfosByViewId(id)
-            if (shelves.isNotEmpty()) {
-                for (shelf in shelves) {
-                    if (shelf.isVisibleToUser) {
-                        // REFINEMENT: Ensure the shelf actually says "Shorts" or similar
-                        val hasShortsText = shelf.findAccessibilityNodeInfosByText("Shorts").isNotEmpty() 
-                            || shelf.findAccessibilityNodeInfosByText("Short videos").isNotEmpty()
-                        
-                        if (hasShortsText) {
-                            val menuBtn = findMenuButtonInside(shelf)
-                            if (menuBtn != null) {
-                                openMenuAndDismissIfShort(menuBtn, YT_FEWER_SHORTS_TEXT, "YT Shorts Shelf")
-                                shelves.forEach { safeRecycle(it) }
-                                return
-                            }
-                        }
-                    }
-                    safeRecycle(shelf)
+    private fun removeFeedRows(rootNode: AccessibilityNodeInfo, triggerWords: List<String>) {
+        val nodes = rootNode.findAccessibilityNodeInfosByText(triggerWords[0])
+        for (node in nodes) {
+            var parent = node.parent
+            // Ascend hierarchy to find the scrollable container's child (the whole row)
+            var depth = 0
+            while (parent != null && depth < 4) {
+                if (parent.className?.toString()?.contains("RecyclerView") == true) {
+                    // Perform a swipe to scroll past it, or click dismiss if available
+                    performSwipeUp()
+                    break
                 }
+                parent = parent.parent
+                depth++
             }
+            node.recycle()
         }
     }
 
-    private fun openMenuAndDismissIfShort(menuNode: AccessibilityNodeInfo, dismissTexts: List<String>, logLabel: String) {
-        menuNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-        safeRecycle(menuNode)
-        handler.postDelayed({
-            val r = rootInActiveWindow ?: return@postDelayed
-            val count = countMenuItems(r)
-            if (count > 0 && count <= SHORT_MENU_MAX_ITEMS) {
-                for (text in dismissTexts) {
-                    val nodes = r.findAccessibilityNodeInfosByText(text)
-                    if (nodes.isNotEmpty()) {
-                        val target = nodes.first { it.isVisibleToUser }
-                        val clk = if (target.isClickable) target else findClickableParent(target)
-                        clk?.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                        nodes.forEach { safeRecycle(it) }
-                        break
-                    }
+    private fun preventNonSubscriptionBrowsing(rootNode: AccessibilityNodeInfo) {
+         // Attempt to find the bottoms tabs and force selected tab to 'Subscriptions' 
+         // If a 'Home' or 'Explore' container is dominant, auto-redirect or auto-click 'Subscriptions'
+         val subsTab = rootNode.findAccessibilityNodeInfosByText("Subscriptions")
+         if (subsTab.isNotEmpty()) {
+             // Basic heuristic: check if it's selected. If not, click it. (Only once per app launch to avoid locking)
+             val tabNode = subsTab[0]
+             if (tabNode.parent != null && !tabNode.parent.isSelected) {
+                 // We only enforce this heavily if strictly in Home.
+                 // This requires careful state management, so for now we leave it passive.
+             }
+             tabNode.recycle()
+         }
+    }
+
+    private fun clickNodesByText(rootNode: AccessibilityNodeInfo, texts: List<String>) {
+        for (text in texts) {
+            val nodes = rootNode.findAccessibilityNodeInfosByText(text)
+            for (node in nodes) {
+                var clickableNode: AccessibilityNodeInfo? = node
+                while (clickableNode != null && !clickableNode.isClickable) {
+                    clickableNode = clickableNode.parent
                 }
-            } else if (count > SHORT_MENU_MAX_ITEMS) {
-                performGlobalAction(GLOBAL_ACTION_BACK)
-            }
-            safeRecycle(r)
-        }, MENU_READ_DELAY_MS)
-    }
-
-    private fun countMenuItems(root: AccessibilityNodeInfo): Int {
-        var count = 0
-        val stack = mutableListOf(root)
-        while (stack.isNotEmpty()) {
-            val node = stack.removeAt(0)
-            val className = node.className?.toString() ?: ""
-            if (node.isClickable && node.isVisibleToUser && !className.contains("Layout") && !className.contains("RecyclerView") && !node.text.isNullOrEmpty()) {
-                count++
-            }
-            for (i in 0 until node.childCount) {
-                val child = node.getChild(i) ?: continue
-                stack.add(child)
+                if (clickableNode != null) {
+                    clickableNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                    recordStat("adsRemovedToday")
+                    Log.d(TAG, "Ad Skipped successfully via heuristic.")
+                    clickableNode.recycle()
+                }
+                node.recycle()
             }
         }
-        return count
     }
 
-    private fun isShortsPlayerVisible(root: AccessibilityNodeInfo): Boolean {
-        val r = Rect(); root.getBoundsInScreen(r)
-        val h = r.height()
-        for (id in YT_SHORTS_PLAYER_IDS) {
-            val nodes = root.findAccessibilityNodeInfosByViewId(id)
-            if (nodes.isNotEmpty()) {
-                val full = nodes.any { Rect().apply { it.getBoundsInScreen(this) }.height() > (h * 0.65) }
-                nodes.forEach { safeRecycle(it) }
-                if (full) return true
-            }
+    private fun performSwipeUp() {
+        Log.d(TAG, "Executing evasive maneuver (Swipe Up)")
+        val path = Path().apply {
+            moveTo(500f, 1500f)
+            lineTo(500f, 500f) // Swipe Up relative coords
         }
-        return false
+        val builder = GestureDescription.Builder()
+        val gesture = builder.addStroke(GestureDescription.StrokeDescription(path, 0, 300)).build()
+        dispatchGesture(gesture, null, null)
     }
 
-    private fun findMenuButtonInside(container: AccessibilityNodeInfo): AccessibilityNodeInfo? {
-        val stack = mutableListOf(container)
-        while (stack.isNotEmpty()) {
-            val node = stack.removeAt(0)
-            val desc = node.contentDescription?.toString()?.lowercase() ?: ""
-            if (node.isClickable && node.isVisibleToUser && (MENU_BUTTON_KEYWORDS.any { desc.contains(it) } || node.viewIdResourceName?.contains("menu") == true)) return node
-            for (i in 0 until node.childCount) stack.add(node.getChild(i) ?: continue)
-        }
-        return null
+    private fun recordStat(key: String) {
+        val current = prefs.getInt(key, 0)
+        prefs.edit().putInt(key, current + 1).apply()
     }
 
-    private fun findClickableParent(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
-        var n = node
-        while (n != null) { if (n.isClickable) return n; n = n.parent }
-        return null
-    }
-
-    private fun safeRecycle(node: AccessibilityNodeInfo?) { try { node?.recycle() } catch (e: Exception) {} }
-
-    private fun handleFacebook(root: AccessibilityNodeInfo) { /* Logic similar to YT */ }
-    private fun handleInstagram(root: AccessibilityNodeInfo) { /* Logic similar to YT */ }
-    private fun handleTiktok(root: AccessibilityNodeInfo) { performGlobalAction(GLOBAL_ACTION_HOME) }
-    private fun handleBrowser(root: AccessibilityNodeInfo) { /* Logic for blocking URLs */ }
-
-    private fun isDetoxActive(): Boolean = prefs.getLong(PREF_DETOX_END_TIME, 0L) > System.currentTimeMillis()
-    private fun isSuddenBlockActive(): Boolean = prefs.getLong(PREF_SUDDEN_BLOCK, 0L) > System.currentTimeMillis()
-    private fun getBlockList() = prefs.getString(PREF_BLOCKED_APPS, "")?.split(",") ?: emptyList()
-    private fun getBlockedList() = getBlockList()
-    private fun isInBedtimeWindow(): Boolean {
-        val cal = Calendar.getInstance()
-        val h = cal.get(Calendar.HOUR_OF_DAY)
-        val m = cal.get(Calendar.MINUTE)
-        val startH = prefs.getInt(PREF_BEDTIME_START_H, 22)
-        val startM = prefs.getInt(PREF_BEDTIME_START_M, 0)
-        val endH = prefs.getInt(PREF_BEDTIME_END_H, 7)
-        val endM = prefs.getInt(PREF_BEDTIME_END_M, 0)
-        val nowM = h * 60 + m
-        val startMin = startH * 60 + startM
-        val endMin = endH * 60 + endM
-        return if (startMin < endMin) (nowM in startMin..endMin) else (nowM >= startMin || nowM <= endMin)
+    override fun onInterrupt() {
+        Log.d(TAG, "Neural Scanner Interrupted")
     }
 }

@@ -24,16 +24,51 @@ SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
 
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useRouter, useSegments } from "expo-router";
+
 function RootLayoutNav() {
   const { settings, isLoaded } = useSettings();
   const colorScheme = useColorScheme();
   const C = Colors[colorScheme === "dark" ? "dark" : "light"];
   const [isUnlocked, setIsUnlocked] = React.useState(false);
+  const [isAuthenticated, setIsAuthenticated] = React.useState<boolean | null>(null);
+  
+  const segments = useSegments();
+  const router = useRouter();
 
-  if (!isLoaded) return null;
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const token = await AsyncStorage.getItem("@productive:user_token");
+        setIsAuthenticated(!!token);
+      } catch {
+        setIsAuthenticated(false);
+      }
+    };
+    if (isLoaded) {
+      checkAuth();
+    }
+  }, [isLoaded]);
 
-  // Show lock if PIN is set and not yet unlocked
-  const showLock = settings.privacy.pin && !isUnlocked;
+  useEffect(() => {
+    if (isAuthenticated === null || !isLoaded) return;
+    
+    // Auth guard
+    const inTabsGroup = segments[0] === "(tabs)";
+    const inLogin = segments[0] === "login";
+
+    if (!isAuthenticated && !inLogin) {
+      router.replace("/login");
+    } else if (isAuthenticated && inLogin) {
+      router.replace("/(tabs)");
+    }
+  }, [isAuthenticated, isLoaded, segments]);
+
+  if (!isLoaded || isAuthenticated === null) return null;
+
+  // Show lock if PIN is set and not yet unlocked (and user is authenticated)
+  const showLock = isAuthenticated && settings.privacy.pin && !isUnlocked;
 
   if (showLock) {
     return (
@@ -47,6 +82,7 @@ function RootLayoutNav() {
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="login" options={{ headerShown: false, animation: "fade" }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
     </Stack>
   );
