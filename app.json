@@ -44,7 +44,11 @@
       "typedRoutes": true
     },
     "extra": {
-      "router": {}
-    }
+      "router": {},
+      "eas": {
+        "projectId": "4929bf33-3f17-4c58-ad46-2064713cc00f"
+      }
+    },
+    "owner": "antualman"
   }
 }
