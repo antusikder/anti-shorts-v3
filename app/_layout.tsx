@@ -11,82 +11,15 @@ import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { useColorScheme } from "react-native";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { SettingsProvider } from "@/context/SettingsContext";
-import { PlannerProvider } from "@/context/PlannerContext";
-import { useSettings } from "@/context/SettingsContext";
-import Colors from "@/constants/colors";
-import PinLockScreen from "@/components/PinLockScreen";
+import { WorkoutProvider } from "@/context/WorkoutContext";
+import { MindsetProvider } from "@/context/MindsetContext";
 
 SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
-
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useRouter, useSegments } from "expo-router";
-
-function RootLayoutNav() {
-  const { settings, isLoaded } = useSettings();
-  const colorScheme = useColorScheme();
-  const C = Colors[colorScheme === "dark" ? "dark" : "light"];
-  const [isUnlocked, setIsUnlocked] = React.useState(false);
-  const [isAuthenticated, setIsAuthenticated] = React.useState<boolean | null>(null);
-  
-  const segments = useSegments();
-  const router = useRouter();
-
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const token = await AsyncStorage.getItem("@productive:user_token");
-        setIsAuthenticated(!!token);
-      } catch {
-        setIsAuthenticated(false);
-      }
-    };
-    if (isLoaded) {
-      checkAuth();
-    }
-  }, [isLoaded]);
-
-  useEffect(() => {
-    if (isAuthenticated === null || !isLoaded) return;
-    
-    // Auth guard
-    const inTabsGroup = segments[0] === "(tabs)";
-    const inLogin = segments[0] === "login";
-
-    if (!isAuthenticated && !inLogin) {
-      router.replace("/login");
-    } else if (isAuthenticated && inLogin) {
-      router.replace("/(tabs)");
-    }
-  }, [isAuthenticated, isLoaded, segments]);
-
-  if (!isLoaded || isAuthenticated === null) return null;
-
-  // Show lock if PIN is set and not yet unlocked (and user is authenticated)
-  const showLock = isAuthenticated && settings.privacy.pin && !isUnlocked;
-
-  if (showLock) {
-    return (
-      <PinLockScreen
-        correctPin={settings.privacy.pin!}
-        C={C}
-        onUnlock={() => setIsUnlocked(true)}
-      />
-    );
-  }
-
-  return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="login" options={{ headerShown: false, animation: "fade" }} />
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-    </Stack>
-  );
-}
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
@@ -109,11 +42,17 @@ export default function RootLayout() {
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
           <SettingsProvider>
-            <PlannerProvider>
-              <GestureHandlerRootView style={{ flex: 1 }}>
-                <RootLayoutNav />
-              </GestureHandlerRootView>
-            </PlannerProvider>
+            <WorkoutProvider>
+              <MindsetProvider>
+                <GestureHandlerRootView style={{ flex: 1 }}>
+                  <Stack screenOptions={{ headerShown: false }}>
+                    <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                    <Stack.Screen name="settings" options={{ headerShown: false, presentation: "modal" }} />
+                    <Stack.Screen name="+not-found" />
+                  </Stack>
+                </GestureHandlerRootView>
+              </MindsetProvider>
+            </WorkoutProvider>
           </SettingsProvider>
         </QueryClientProvider>
       </ErrorBoundary>

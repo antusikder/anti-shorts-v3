@@ -139,11 +139,14 @@ export default function LoginScreen() {
             style={styles.skipBtn} 
             onPress={async () => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              await AsyncStorage.setItem("@productive:user_token", "skip-token");
+              setLoading(true);
+              // Set mock data for the elite experience
+              await AsyncStorage.setItem("@productive:user_token", "skip-token-elite-v4");
+              await AsyncStorage.setItem("@productive:user_name", "Elite Guest");
               router.replace("/(tabs)");
             }}
           >
-            <Text style={styles.skipBtnText}>Skip for now</Text>
+            <Text style={styles.skipBtnText}>Skip for now (Bypass Login)</Text>
           </TouchableOpacity>
 
           <View style={styles.dividerContainer}>

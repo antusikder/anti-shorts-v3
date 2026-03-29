@@ -1,118 +1,127 @@
-// Fresh Mind — design token palette
-// Cozy light chocolate (Latte / Day) + Dark Chocolate (Mocha / Night)
+// Fresh Mind Elite — Dark Glass Design System
 
-const primary    = "#8B5A2B"; // Milk Chocolate
-const primaryDark= "#A67B5B";
-const amber      = "#DEB887"; // Burlywood / Warm Caramel
-const green      = "#558B2F"; // Natural Leaf Green
-const red        = "#CD5C5C"; // Muted Rose
-const blue       = "#8BA4B5"; // Slate Blue
+export const C = {
+  bg: "#07060F",
+  bgCard: "rgba(255,255,255,0.04)",
+  bgElevated: "rgba(255,255,255,0.07)",
+  bgGlass: "rgba(14,12,26,0.92)",
+  border: "rgba(255,255,255,0.08)",
+  borderStrong: "rgba(255,255,255,0.14)",
 
-export default {
+  text: "#F0EFFF",
+  textSub: "#A8A6C0",
+  textMuted: "#6B6880",
+
+  amber: "#FFB300",
+  amberGlow: "rgba(255,179,0,0.15)",
+  amberBorder: "rgba(255,179,0,0.3)",
+  green: "#2ED573",
+  greenGlow: "rgba(46,213,115,0.15)",
+  danger: "#FF4757",
+  dangerGlow: "rgba(255,71,87,0.15)",
+  blue: "#5352ED",
+  blueGlow: "rgba(83,82,237,0.15)",
+  purple: "#9C27B0",
+  purpleGlow: "rgba(156,39,176,0.15)",
+  cyan: "#00BCD4",
+  cyanGlow: "rgba(0,188,212,0.15)",
+
+  youtube: "#FF0000",
+  facebook: "#1877F2",
+  instagram: "#E1306C",
+  tiktok: "#010101",
+  reddit: "#FF4500",
+
+  tint: "#FFB300",
+  tabIconDefault: "#4A485E",
+  tabIconSelected: "#FFB300",
+
+  gradBg: ["#07060F", "#0D0B1E"] as [string, string],
+  gradCard: ["rgba(255,255,255,0.06)", "rgba(255,255,255,0.02)"] as [string, string],
+  gradAmber: ["#FFB300", "#FF8C00"] as [string, string],
+  gradGreen: ["#2ED573", "#1EB85A"] as [string, string],
+  gradBlue: ["#5352ED", "#3534C9"] as [string, string],
+  gradDanger: ["#FF4757", "#E0263B"] as [string, string],
+};
+
+// Keep backward compat for legacy screens
+const palette = {
   light: {
-    // Backgrounds
-    background:          "#FDFBF7",  // Warm Cream
-    backgroundSecondary: "#F5F0EA",  // Soft Latte
-    backgroundCard:      "#FFFFFF",  // Clean White for cards
-    backgroundElevated:  "#EBE3D5",  // Light Mocha
-    backgroundGlass:     "rgba(255, 255, 255, 0.85)",
-
-    // Borders
-    border:              "#E6DCCC",
-    borderLight:         "#F0EAE1",
-
-    // Text
-    text:                "#4A3B32",  // Deep Espresso
-    textSecondary:       "#7C6A5D",  // Warm Taupe
-    textMuted:           "#A4988E",  // Soft Ash Brown
-
-    // Accents
-    tint:                primary,
-    tintDark:            primaryDark,
-    amber:               amber,
-    amberSoft:           amber + "33",
-    green:               green,
-    success:             green,
-    danger:              red,
-    warning:             amber,
-    info:                blue,
-
-    // Platform
-    youtube:             "#D9534F",
-    facebook:            "#5BC0DE",
-    instagram:           "#E1306C",
-    tiktok:              "#000000",
-
-    accentGreen:         green,
-    accentYellow:        amber,
-
-    // UI
-    tabIconDefault:      "#A4988E",
-    tabIconSelected:     primary,
-    switchTrack:         "#EBE3D5",
-    switchThumb:         "#FFFFFF",
-
-    // Gradient stops (for LinearGradient)
-    gradStart:           "#FDFBF7",
-    gradMid:             "#F5F0EA",
-    gradEnd:             "#FDFBF7",
-
-    // Planner
-    plannerAccent:       "#C19A6B",  // Camel
-    breakColor:          "#8FBC8F",  // Sage
-    strictColor:         "#CD5C5C",  // Rose
+    background: "#FDFBF7",
+    backgroundSecondary: "#F5F0EA",
+    backgroundCard: "#FFFFFF",
+    backgroundElevated: "#EBE3D5",
+    backgroundGlass: "rgba(255,255,255,0.85)",
+    border: "#E6DCCC",
+    borderLight: "#F0EAE1",
+    text: "#4A3B32",
+    textSecondary: "#7C6A5D",
+    textMuted: "#A4988E",
+    tint: "#8B5A2B",
+    tintDark: "#A67B5B",
+    amber: "#DEB887",
+    amberSoft: "#DEB88733",
+    green: "#558B2F",
+    success: "#558B2F",
+    danger: "#CD5C5C",
+    warning: "#DEB887",
+    info: "#8BA4B5",
+    youtube: "#D9534F",
+    facebook: "#5BC0DE",
+    instagram: "#E1306C",
+    tiktok: "#000000",
+    reddit: "#FF4500",
+    accentGreen: "#558B2F",
+    accentYellow: "#DEB887",
+    tabIconDefault: "#A4988E",
+    tabIconSelected: "#8B5A2B",
+    switchTrack: "#EBE3D5",
+    switchThumb: "#FFFFFF",
+    gradStart: "#FDFBF7",
+    gradMid: "#F5F0EA",
+    gradEnd: "#FDFBF7",
+    plannerAccent: "#C19A6B",
+    breakColor: "#8FBC8F",
+    strictColor: "#CD5C5C",
   },
   dark: {
-    // Backgrounds
-    background:          "#1A1412",  // Deep Espresso Space
-    backgroundSecondary: "#241D1A",  // Dark Roast
-    backgroundCard:      "#2D2521",  // Dark Mocha
-    backgroundElevated:  "#3A312B",  // Hot Cocoa
-    backgroundGlass:     "rgba(45, 37, 33, 0.85)",
-
-    // Borders
-    border:              "#3A312B",
-    borderLight:         "#4A413C",
-
-    // Text
-    text:                "#F0EBE6",  // Rich Cream
-    textSecondary:       "#C1B6AD",  // Warm Ash
-    textMuted:           "#8C7F75",  // Muted Taupe
-
-    // Accents
-    tint:                "#D4A373",  // Caramel Tint for dark mode
-    tintDark:            "#BC8A5F",
-    amber:               amber,
-    amberSoft:           amber + "33",
-    green:               "#8FBC8F",  // Lighter Sage
-    success:             "#8FBC8F",
-    danger:              "#E56B6F",
-    warning:             amber,
-    info:                blue,
-
-    // Platform
-    youtube:             "#E56B6F",
-    facebook:            "#8BA4B5",
-    instagram:           "#E27396",
-    tiktok:              "#E0E0E0",
-
-    accentGreen:         green,
-    accentYellow:        amber,
-
-    // UI
-    tabIconDefault:      "#8C7F75",
-    tabIconSelected:     "#D4A373",
-    switchTrack:         "#3A312B",
-    switchThumb:         "#F0EBE6",
-
-    // Gradient stops (for LinearGradient)
-    gradStart:           "#1A1412",
-    gradMid:             "#241D1A",
-    gradEnd:             "#1A1412",
-
-    // Planner
-    plannerAccent:       "#DEB887",
-    breakColor:          "#8FBC8F",
-    strictColor:         "#E56B6F",
+    background: C.bg,
+    backgroundSecondary: "#0D0B1E",
+    backgroundCard: C.bgCard,
+    backgroundElevated: C.bgElevated,
+    backgroundGlass: C.bgGlass,
+    border: C.border,
+    borderLight: C.borderStrong,
+    text: C.text,
+    textSecondary: C.textSub,
+    textMuted: C.textMuted,
+    tint: C.amber,
+    tintDark: "#E09500",
+    amber: C.amber,
+    amberSoft: C.amberGlow,
+    green: C.green,
+    success: C.green,
+    danger: C.danger,
+    warning: C.amber,
+    info: C.blue,
+    youtube: C.youtube,
+    facebook: C.facebook,
+    instagram: C.instagram,
+    tiktok: "#EEEEEE",
+    reddit: C.reddit,
+    accentGreen: C.green,
+    accentYellow: C.amber,
+    tabIconDefault: C.tabIconDefault,
+    tabIconSelected: C.tabIconSelected,
+    switchTrack: "rgba(255,255,255,0.1)",
+    switchThumb: C.text,
+    gradStart: C.bg,
+    gradMid: "#0D0B1E",
+    gradEnd: C.bg,
+    plannerAccent: C.amber,
+    breakColor: C.green,
+    strictColor: C.danger,
   },
 };
+
+export default palette;

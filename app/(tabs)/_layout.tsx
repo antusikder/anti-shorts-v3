@@ -1,34 +1,37 @@
 import { BlurView } from "expo-blur";
-import { Tabs } from "expo-router";
-import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Tabs, router } from "expo-router";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import React from "react";
-import { Platform, StyleSheet, View, useColorScheme } from "react-native";
-
-import Colors from "@/constants/colors";
+import { Platform, StyleSheet, View, TouchableOpacity } from "react-native";
 
 export default function TabLayout() {
   const isIOS = Platform.OS === "ios";
-  const colorScheme = useColorScheme();
-  const C = Colors[colorScheme === "dark" ? "dark" : "light"];
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: C.tint,
-        tabBarInactiveTintColor: C.tabIconDefault,
+        tabBarActiveTintColor: "#FFB300",
+        tabBarInactiveTintColor: "#555",
         headerShown: false,
         tabBarStyle: {
           position: "absolute",
-          backgroundColor: isIOS ? "transparent" : C.backgroundGlass,
-          borderTopWidth: StyleSheet.hairlineWidth,
-          borderTopColor: C.border,
+          backgroundColor: isIOS ? "transparent" : "#0E0C1A",
+          borderTopWidth: 1,
+          borderTopColor: "rgba(255,255,255,0.06)",
           elevation: 0,
+          height: 64,
+          paddingBottom: 8,
+        },
+        tabBarLabelStyle: {
+          fontFamily: "Inter_600SemiBold",
+          fontSize: 10,
+          letterSpacing: 0.3,
         },
         tabBarBackground: () =>
           isIOS ? (
-            <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
+            <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
           ) : (
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: C.backgroundSecondary }]} />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: "#0E0C1A" }]} />
           ),
       }}
     >
@@ -39,6 +42,32 @@ export default function TabLayout() {
           tabBarIcon: ({ color, focused }) => (
             <MaterialCommunityIcons
               name={focused ? "view-dashboard" : "view-dashboard-outline"}
+              size={24}
+              color={color}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="shield"
+        options={{
+          title: "Shield",
+          tabBarIcon: ({ color, focused }) => (
+            <MaterialCommunityIcons
+              name={focused ? "shield-crown" : "shield-crown-outline"}
+              size={24}
+              color={color}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="mindset"
+        options={{
+          title: "Mindset",
+          tabBarIcon: ({ color, focused }) => (
+            <MaterialCommunityIcons
+              name={focused ? "brain" : "head-cog-outline"}
               size={24}
               color={color}
             />
@@ -61,14 +90,13 @@ export default function TabLayout() {
       <Tabs.Screen
         name="access"
         options={{
-          title: "Access",
-          tabBarIcon: ({ color, focused }) => (
-            <MaterialCommunityIcons
-              name={focused ? "shield-key" : "shield-key-outline"}
-              size={26}
-              color={color}
-            />
-          ),
+          href: null, // Hidden — legacy, replaced by settings screen
+        }}
+      />
+      <Tabs.Screen
+        name="routine"
+        options={{
+          href: null, // Hidden — integrated into mindset
         }}
       />
     </Tabs>
