@@ -231,7 +231,7 @@ class AntiShortsService : AccessibilityService() {
      * ignoring explicit IDs or specific texts entirely to defeat obfuscation.
      */
     private fun performNeuralAnalysis(node: AccessibilityNodeInfo, depth: Int): Boolean {
-        if (depth > 20 || node.isDestroyed) return false
+        if (depth > 20) return false
         
         // Depth-First Mathematical Screen Space Coverage.
         if (node.className == "android.widget.FrameLayout" || node.className == "androidx.viewpager2.widget.ViewPager2" || node.className == "android.widget.ScrollView") {
@@ -261,7 +261,7 @@ class AntiShortsService : AccessibilityService() {
     }
 
     private fun countDeepChildren(node: AccessibilityNodeInfo, depth: Int): Int {
-        if (depth > 6 || node.isDestroyed) return 0
+        if (depth > 6) return 0
         var total = node.childCount
         for (i in 0 until node.childCount) {
              val c = node.getChild(i)
@@ -319,7 +319,7 @@ class AntiShortsService : AccessibilityService() {
     }
 
     private fun assessGeometricFrames(node: AccessibilityNodeInfo, depth: Int): Boolean {
-        if (depth > 20 || node.isDestroyed) return false
+        if (depth > 20) return false
         val bounds = Rect()
         node.getBoundsInScreen(bounds)
         val h = bounds.height()
