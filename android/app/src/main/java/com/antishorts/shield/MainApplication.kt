@@ -15,6 +15,8 @@ import com.facebook.react.defaults.DefaultReactNativeHost
 
 import expo.modules.ApplicationLifecycleDispatcher
 import expo.modules.ReactNativeHostWrapper
+import com.antishorts.shield.AntiShortsPackage
+import com.antishorts.shield.BuildConfig
 
 class MainApplication : Application(), ReactApplication {
 

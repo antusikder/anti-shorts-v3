@@ -14,6 +14,7 @@ import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.bridge.WritableArray
+import com.antishorts.shield.BuildConfig
 
 class AntiShortsModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
     private val prefs: SharedPreferences = reactContext.getSharedPreferences("AntiShortsPrefs", Context.MODE_PRIVATE)
@@ -51,7 +52,7 @@ class AntiShortsModule(reactContext: ReactApplicationContext) : ReactContextBase
             if (m.hasKey("youtubeAutoBack")) putBoolean("youtubeAutoBack", m.getBoolean("youtubeAutoBack"))
             if (m.hasKey("systemEnabled")) putBoolean("systemEnabled", m.getBoolean("systemEnabled"))
             if (m.hasKey("skipAds")) putBoolean("skipAds", m.getBoolean("skipAds"))
-            if (m.hasKey("scanSpeedMs")) putLong("scanIntervalMs", m.getInt("scanSpeedMs").toLong())
+            if (m.hasKey("scanSpeedMs")) putLong("scanIntervalMs", m.getDouble("scanSpeedMs").toLong())
             if (m.hasKey("blockActive")) putBoolean("blockActive", m.getBoolean("blockActive"))
             if (m.hasKey("blockedApps")) putString("blockedApps", m.getString("blockedApps"))
             if (m.hasKey("shaperCategories")) putString("shaperCategories", m.getString("shaperCategories"))

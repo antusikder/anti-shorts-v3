@@ -276,7 +276,7 @@ class AntiShortsService : AccessibilityService() {
     private fun method1ShelfSweeper(rootNode: AccessibilityNodeInfo, targetTexts: List<String>) {
         targetTexts.forEach { text ->
             rootNode.findAccessibilityNodeInfosByText(text).forEach { node ->
-                if (node.className == "android.widget.TextView") {
+                if (node.className?.toString() == "android.widget.TextView") {
                     var parent = node.parent
                     var attempts = 0
                     while (parent != null && attempts < 4) {
@@ -326,7 +326,7 @@ class AntiShortsService : AccessibilityService() {
         val w = Math.max(1, bounds.width())
         val ratio = h.toFloat() / w.toFloat()
         
-        if (ratio > 1.7f && h > 1600 && (node.className?.contains("Player") == true || node.className?.contains("Video") == true)) {
+        if (ratio > 1.7f && h > 1600 && (node.className?.toString()?.contains("Player") == true || node.className?.toString()?.contains("Video") == true)) {
             return true
         }
 
