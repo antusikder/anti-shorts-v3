@@ -193,14 +193,13 @@ const pr = StyleSheet.create({
 
 const QuickActions = memo(() => {
   const { triggerSuddenBlock } = useSettings();
+  const [panicVisible, setPanicVisible] = useState(false);
 
   const actions = useMemo(() => [
     {
       icon: "lightning-bolt", label: "Panic Block",
       desc: "Block all apps for 5 minutes",
-      onPress: () => {
-          setPanicVisible(true);
-      },
+      onPress: () => setPanicVisible(true),
     },
     {
       icon: "cog", label: "Settings",
@@ -208,8 +207,6 @@ const QuickActions = memo(() => {
       onPress: () => router.push("/settings"),
     },
   ], []);
-
-  const [panicVisible, setPanicVisible] = useState(false);
 
   return (
     <View style={{ marginBottom: 16 }}>
