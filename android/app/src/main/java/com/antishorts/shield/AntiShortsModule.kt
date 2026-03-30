@@ -1,99 +1,77 @@
 package com.antishorts.shield
 
-import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Context
-import android.content.Intent
 import android.content.SharedPreferences
-import android.provider.Settings
-import android.view.accessibility.AccessibilityManager
-import android.net.Uri
-import com.facebook.react.bridge.Arguments
-import com.facebook.react.bridge.Promise
-import com.facebook.react.bridge.ReactApplicationContext
-import com.facebook.react.bridge.ReactContextBaseJavaModule
-import com.facebook.react.bridge.ReactMethod
-import com.facebook.react.bridge.ReadableMap
-import com.facebook.react.bridge.WritableArray
-import com.antishorts.shield.BuildConfig
+import com.facebook.react.bridge.*
 
 class AntiShortsModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
-    private val prefs: SharedPreferences = reactContext.getSharedPreferences("AntiShortsPrefs", Context.MODE_PRIVATE)
-    
-    override fun getName(): String = "AntiShortsModule"
+
+    private val prefs: SharedPreferences by lazy {
+        reactContext.getSharedPreferences(AntiShortsService.PREFS, Context.MODE_PRIVATE)
+    }
+
+    override fun getName() = "AntiShortsModule"
 
     @ReactMethod
     fun isServiceEnabled(promise: Promise) {
-        val am = reactApplicationContext.getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
-        val enabled = am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
-        promise.resolve(enabled.any { it.resolveInfo.serviceInfo.packageName == reactApplicationContext.packageName })
+        try {
+            val mgr = reactApplicationContext.getSystemService(Context.ACCESSIBILITY_SERVICE) as android.view.accessibility.AccessibilityManager
+            val enabledServices = android.provider.Settings.Secure.getString(
+                reactApplicationContext.contentResolver,
+                android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+            ) ?: ""
+            val pkg = reactApplicationContext.packageName
+            promise.resolve(enabledServices.contains(pkg))
+        } catch (e: Exception) {
+            promise.resolve(false)
+        }
     }
 
     @ReactMethod
     fun openAccessibilitySettings() {
         try {
-            val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_HISTORY or Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS
+            val intent = android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
+            intent.flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
             reactApplicationContext.startActivity(intent)
         } catch (e: Exception) {
             try {
-                // Intense Fallback for deeply locked OEM ROMs (Samsung, UI, Xiaomi)
-                val fallback = Intent(Settings.ACTION_SETTINGS)
-                fallback.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                val fallback = android.content.Intent(android.provider.Settings.ACTION_SETTINGS)
+                fallback.flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
                 reactApplicationContext.startActivity(fallback)
-            } catch (ignored: Exception) {}
+            } catch (_: Exception) {}
         }
     }
 
     @ReactMethod
-    fun updateSettings(m: ReadableMap) {
-        prefs.edit().apply {
-            if (m.hasKey("ytEnabled")) putBoolean("ytEnabled", m.getBoolean("ytEnabled"))
-            if (m.hasKey("youtubeRemoveShorts")) putBoolean("youtubeRemoveShorts", m.getBoolean("youtubeRemoveShorts"))
-            if (m.hasKey("youtubeAutoBack")) putBoolean("youtubeAutoBack", m.getBoolean("youtubeAutoBack"))
-            if (m.hasKey("systemEnabled")) putBoolean("systemEnabled", m.getBoolean("systemEnabled"))
-            if (m.hasKey("skipAds")) putBoolean("skipAds", m.getBoolean("skipAds"))
-            if (m.hasKey("scanSpeedMs")) putLong("scanIntervalMs", m.getDouble("scanSpeedMs").toLong())
-            if (m.hasKey("blockActive")) putBoolean("blockActive", m.getBoolean("blockActive"))
-            if (m.hasKey("blockedApps")) putString("blockedApps", m.getString("blockedApps"))
-            if (m.hasKey("shaperCategories")) putString("shaperCategories", m.getString("shaperCategories"))
-            if (m.hasKey("method1_sweeper")) putBoolean("method1_sweeper", m.getBoolean("method1_sweeper"))
-            if (m.hasKey("method2_sniper")) putBoolean("method2_sniper", m.getBoolean("method2_sniper"))
-            if (m.hasKey("method3_geometric")) putBoolean("method3_geometric", m.getBoolean("method3_geometric"))
-            if (m.hasKey("method4_bouncer")) putBoolean("method4_bouncer", m.getBoolean("method4_bouncer"))
-            if (m.hasKey("method5_neural")) putBoolean("method5_neural", m.getBoolean("method5_neural"))
-            if (m.hasKey("browser_monitoring")) putBoolean("browser_monitoring", m.getBoolean("browser_monitoring"))
-            if (m.hasKey("panic_mode")) putBoolean("panic_mode", m.getBoolean("panic_mode"))
-        }.apply()
+    fun updateSettings(settings: ReadableMap) {
+        val editor = prefs.edit()
+        settings.toHashMap().forEach { (key, value) ->
+            when (value) {
+                is Boolean -> editor.putBoolean(key, value)
+                is Double  -> editor.putLong(key, value.toLong())
+                is String  -> editor.putString(key, value)
+                else       -> {}
+            }
+        }
+        editor.apply()
     }
 
     @ReactMethod
-    fun triggerSuddenBlock(durationMin: Int) {
-        prefs.edit().apply {
-            putBoolean("panic_mode", true)
-            putLong("panic_end_time", System.currentTimeMillis() + (durationMin * 60 * 1000L))
-        }.apply()
+    fun getStats(promise: Promise) {
+        val map = Arguments.createMap()
+        map.putInt("shortsBlocked", prefs.getInt("shortsBlocked", 0))
+        map.putInt("reelsBlocked",  prefs.getInt("reelsBlocked", 0))
+        map.putInt("adsSkipped",    prefs.getInt("adsSkipped", 0))
+        promise.resolve(map)
     }
 
     @ReactMethod
     fun getRewardTrigger(promise: Promise) {
-        promise.resolve(prefs.getLong("latestRewardTriggerAt", 0L).toDouble())
+        promise.resolve(prefs.getLong("rewardTriggerTime", 0L).toDouble())
     }
 
     @ReactMethod
     fun clearRewardTrigger() {
-        prefs.edit().putLong("latestRewardTriggerAt", 0L).apply()
-    }
-
-    @ReactMethod
-    fun getInstalledApps(promise: Promise) {
-        val pm = reactApplicationContext.packageManager
-        val apps: WritableArray = Arguments.createArray()
-        pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).apply { addCategory(Intent.CATEGORY_LAUNCHER) }, 0).forEach {
-            val pkg = it.activityInfo.packageName
-            if (pkg != reactApplicationContext.packageName) {
-                apps.pushMap(Arguments.createMap().apply { putString("name", it.loadLabel(pm).toString()); putString("pkg", pkg) })
-            }
-        }
-        promise.resolve(apps)
+        prefs.edit().remove("rewardTriggerTime").apply()
     }
 }

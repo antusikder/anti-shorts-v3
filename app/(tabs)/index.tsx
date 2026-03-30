@@ -1,375 +1,324 @@
-import React, { memo, useCallback, useEffect, useMemo, useState } from "react";
+import React, { memo, useCallback, useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Dimensions, AppState, AppStateStatus, Alert, Linking,
+  Animated, Dimensions, Easing,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import * as Haptics from "expo-haptics";
 import { useSettings } from "@/context/SettingsContext";
-import { useWorkout } from "@/context/WorkoutContext";
-import { useMindset } from "@/context/MindsetContext";
+import { C, R, S } from "@/constants/colors";
 import { AccessibilityModule } from "@/modules/AccessibilityModule";
-import { CustomAlert } from "../components/CustomAlert";
-import { C, R } from "@/constants/colors";
 
 const { width: SW } = Dimensions.get("window");
 
 // ════════════════════════════════════════════════════════════════════════════
-// SHIELD STATUS HERO
+// ANIMATED SHIELD HERO
 // ════════════════════════════════════════════════════════════════════════════
 
-const ShieldHero = memo(() => {
-  const { settings, setServiceEnabled } = useSettings();
-  const [serviceActive, setServiceActive] = useState(false);
+const ShieldHero = memo(({ active }: { active: boolean }) => {
+  const pulse = useRef(new Animated.Value(1)).current;
+  const glow  = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    checkService();
-    const sub = AppState.addEventListener("change", (s: AppStateStatus) => {
-      if (s === "active") checkService();
-    });
-    return () => sub.remove();
-  }, []);
+    if (active) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulse, { toValue: 1.08, duration: 1400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+          Animated.timing(pulse, { toValue: 1,    duration: 1400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        ])
+      ).start();
+      Animated.timing(glow, { toValue: 1, duration: 400, useNativeDriver: false }).start();
+    } else {
+      pulse.setValue(1);
+      Animated.timing(glow, { toValue: 0, duration: 400, useNativeDriver: false }).start();
+    }
+  }, [active]);
 
-  const checkService = async () => {
-    const enabled = await AccessibilityModule.isServiceEnabled();
-    setServiceActive(enabled);
-    setServiceEnabled(enabled);
-  };
+  const glowColor = glow.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["rgba(200,149,108,0)", "rgba(200,149,108,0.30)"],
+  });
 
   return (
-    <TouchableOpacity
-      style={[hero.card, serviceActive ? hero.cardActive : hero.cardInactive]}
-      onPress={() => {
-        if (!serviceActive) {
-          AccessibilityModule.openAccessibilitySettings();
-        }
-      }}
-      activeOpacity={serviceActive ? 1 : 0.85}
-    >
-      <View style={hero.row}>
-        <View style={[hero.iconWrap, { backgroundColor: serviceActive ? C.amberBg : C.dangerBg }]}>
+    <View style={sh.container}>
+      <Animated.View style={[sh.glowRing, { shadowColor: active ? C.accent : "transparent", shadowRadius: 30, shadowOpacity: 1 }]}>
+        <Animated.View style={[sh.iconWrap, {
+          transform: [{ scale: pulse }],
+          backgroundColor: active ? C.accentBg : "rgba(255,255,255,0.04)",
+          borderColor: active ? C.accentBorder : C.border,
+        }]}>
           <MaterialCommunityIcons
-            name={serviceActive ? "shield-check" : "shield-off"}
-            size={28}
-            color={serviceActive ? C.amber : C.danger}
+            name={active ? "shield-check" : "shield-off-outline"}
+            size={52}
+            color={active ? C.accent : C.textMuted}
           />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={hero.title}>
-            Neural Shield {serviceActive ? "Active" : "Disabled"}
-          </Text>
-          <Text style={hero.subtitle}>
-            {serviceActive
-              ? "Scanning for shorts, reels, and ads in real-time."
-              : "Tap to enable the accessibility service."}
-          </Text>
-        </View>
-        {serviceActive && (
-          <View style={hero.liveDot} />
-        )}
-      </View>
-    </TouchableOpacity>
-  );
-});
-
-const hero = StyleSheet.create({
-  card: { borderRadius: R.card, padding: 16, marginBottom: 16, borderWidth: 1 },
-  cardActive: { backgroundColor: C.bgCard, borderColor: C.amberBorder },
-  cardInactive: { backgroundColor: C.bgCard, borderColor: C.dangerBorder },
-  row: { flexDirection: "row", alignItems: "center", gap: 14 },
-  iconWrap: { width: 52, height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center" },
-  title: { fontFamily: "Inter_700Bold", fontSize: 16, color: C.text, marginBottom: 4 },
-  subtitle: { fontFamily: "Inter_400Regular", fontSize: 12, color: C.textSub, lineHeight: 18 },
-  liveDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: C.success },
-});
-
-// ════════════════════════════════════════════════════════════════════════════
-// STATS ROW
-// ════════════════════════════════════════════════════════════════════════════
-
-const StatsRow = memo(() => {
-  const { settings } = useSettings();
-  const stats = settings.stats;
-
-  const items = useMemo(() => [
-    { icon: "youtube", label: "Shorts", value: stats.shortsShieldedToday, total: stats.totalShortsShielded },
-    { icon: "filmstrip-off", label: "Reels", value: stats.reelsRejectedToday, total: stats.totalReelsRejected },
-    { icon: "skip-next", label: "Ads", value: stats.adsRemovedToday, total: stats.totalAdsRemoved },
-  ], [stats]);
-
-  return (
-    <View style={sr.row}>
-      {items.map((item, i) => (
-        <View key={i} style={sr.card}>
-          <MaterialCommunityIcons name={item.icon as any} size={18} color={C.amber} style={{ marginBottom: 8 }} />
-          <Text style={sr.value}>{item.value}</Text>
-          <Text style={sr.label}>{item.label} today</Text>
-          <Text style={sr.total}>{item.total} total</Text>
-        </View>
-      ))}
+        </Animated.View>
+      </Animated.View>
+      <Text style={[sh.label, { color: active ? C.accent : C.textMuted }]}>
+        {active ? "Shield Active" : "Shield Off"}
+      </Text>
+      <Text style={sh.sublabel}>
+        {active ? "Protecting you from short-form content" : "Tap Shield to enable protection"}
+      </Text>
     </View>
   );
 });
 
-const sr = StyleSheet.create({
-  row: { flexDirection: "row", gap: 10, marginBottom: 16 },
-  card: { flex: 1, backgroundColor: C.bgCard, borderWidth: 1, borderColor: C.border, borderRadius: R.card, padding: 14, alignItems: "center" },
-  value: { fontFamily: "Inter_700Bold", fontSize: 28, color: C.text, letterSpacing: -1 },
-  label: { fontFamily: "Inter_500Medium", fontSize: 11, color: C.textMuted, marginTop: 4 },
-  total: { fontFamily: "Inter_400Regular", fontSize: 10, color: C.textMuted, marginTop: 2 },
+const sh = StyleSheet.create({
+  container: { alignItems: "center", paddingVertical: 32 },
+  glowRing: { alignItems: "center", justifyContent: "center" },
+  iconWrap: {
+    width: 120, height: 120, borderRadius: 60,
+    borderWidth: 2, alignItems: "center", justifyContent: "center",
+    marginBottom: 16,
+  },
+  label: { fontFamily: "Nunito_700Bold", fontSize: 22, letterSpacing: -0.3, marginBottom: 6 },
+  sublabel: { fontFamily: "Nunito_400Regular", fontSize: 14, color: C.textMuted, textAlign: "center", paddingHorizontal: 32 },
 });
 
 // ════════════════════════════════════════════════════════════════════════════
-// CORE PILLARS OVERVIEW
+// STAT CARD
 // ════════════════════════════════════════════════════════════════════════════
 
-const PillarRow = memo(({ icon, label, status, statusColor, onPress }: {
-  icon: string; label: string; status: string; statusColor: string; onPress: () => void;
+const StatCard = memo(({ icon, value, label, color }: {
+  icon: string; value: number; label: string; color: string;
 }) => (
-  <TouchableOpacity style={pr.row} onPress={onPress} activeOpacity={0.85}>
-    <MaterialCommunityIcons name={icon as any} size={20} color={C.amber} />
-    <Text style={pr.label}>{label}</Text>
-    <Text style={[pr.status, { color: statusColor }]}>{status}</Text>
+  <View style={sc.card}>
+    <MaterialCommunityIcons name={icon as any} size={20} color={color} style={{ marginBottom: 8 }} />
+    <Text style={[sc.value, { color }]}>{value}</Text>
+    <Text style={sc.label}>{label}</Text>
+  </View>
+));
+
+const sc = StyleSheet.create({
+  card: {
+    flex: 1, backgroundColor: C.bgCard, borderRadius: R.card,
+    borderWidth: 1, borderColor: C.border,
+    padding: 16, alignItems: "center",
+  },
+  value: { fontFamily: "Nunito_800ExtraBold", fontSize: 28, letterSpacing: -1, marginBottom: 4 },
+  label: { fontFamily: "Nunito_600SemiBold", fontSize: 11, color: C.textMuted, textAlign: "center" },
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// QUICK ACTION
+// ════════════════════════════════════════════════════════════════════════════
+
+const QuickAction = memo(({ icon, label, desc, onPress, danger }: {
+  icon: string; label: string; desc: string; onPress: () => void; danger?: boolean;
+}) => (
+  <TouchableOpacity style={qa.card} onPress={onPress} activeOpacity={0.82}>
+    <View style={[qa.iconWrap, { backgroundColor: danger ? C.dangerBg : C.accentBg, borderColor: danger ? C.dangerBorder : C.accentBorder }]}>
+      <MaterialCommunityIcons name={icon as any} size={22} color={danger ? C.danger : C.accent} />
+    </View>
+    <View style={{ flex: 1 }}>
+      <Text style={qa.label}>{label}</Text>
+      <Text style={qa.desc}>{desc}</Text>
+    </View>
     <MaterialCommunityIcons name="chevron-right" size={18} color={C.textMuted} />
   </TouchableOpacity>
 ));
 
-const CorePillars = memo(() => {
-  const { mindset } = useMindset();
-  const { workout } = useWorkout();
-  const { settings } = useSettings();
-
-  const screenTimePct = useMemo(() => {
-    if (!mindset.screenTime.enabled) return "Off";
-    return `${mindset.screenTime.dailyLimitMin}m limit`;
-  }, [mindset.screenTime]);
-
-  return (
-    <View style={pr.container}>
-      <Text style={pr.sectionLabel}>Core Pillars</Text>
-      <View style={pr.card}>
-        <PillarRow
-          icon="shield-crown"
-          label="Smart Shield"
-          status={settings.isServiceEnabled ? "Active" : "Disabled"}
-          statusColor={settings.isServiceEnabled ? C.success : C.danger}
-          onPress={() => router.push("/(tabs)/shield")}
-        />
-        <View style={pr.divider} />
-        <PillarRow
-          icon="brain"
-          label="Mindset & Focus"
-          status={screenTimePct}
-          statusColor={C.amber}
-          onPress={() => router.push("/(tabs)/mindset")}
-        />
-        <View style={pr.divider} />
-        <PillarRow
-          icon="arm-flex"
-          label="Fitness"
-          status={`${workout.totalSessionsCompleted} sessions`}
-          statusColor={C.amber}
-          onPress={() => router.push("/(tabs)/workout")}
-        />
-      </View>
-    </View>
-  );
-});
-
-const pr = StyleSheet.create({
-  container: { marginBottom: 16 },
-  sectionLabel: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 },
-  card: { backgroundColor: C.bgCard, borderWidth: 1, borderColor: C.border, borderRadius: R.card, overflow: "hidden" },
-  row: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 14, paddingHorizontal: 16 },
-  label: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: C.text, flex: 1 },
-  status: { fontFamily: "Inter_500Medium", fontSize: 12 },
-  divider: { height: 1, backgroundColor: C.border, marginHorizontal: 16 },
-});
-
-// ════════════════════════════════════════════════════════════════════════════
-// QUICK ACTIONS
-// ════════════════════════════════════════════════════════════════════════════
-
-const QuickActions = memo(() => {
-  const { triggerSuddenBlock } = useSettings();
-  const [panicVisible, setPanicVisible] = useState(false);
-
-  const actions = useMemo(() => [
-    {
-      icon: "lightning-bolt", label: "Panic Block",
-      desc: "Block all apps for 5 minutes",
-      onPress: () => setPanicVisible(true),
-    },
-    {
-      icon: "cog", label: "Settings",
-      desc: "PIN, profiles, support",
-      onPress: () => router.push("/settings"),
-    },
-  ], []);
-
-  return (
-    <View style={{ marginBottom: 16 }}>
-      <Text style={pr.sectionLabel}>Quick Actions</Text>
-      <View style={{ flexDirection: "row", gap: 10 }}>
-        {actions.map((a, i) => (
-          <TouchableOpacity key={i} style={qa.btn} onPress={a.onPress} activeOpacity={0.85}>
-            <MaterialCommunityIcons name={a.icon as any} size={22} color={C.amber} style={{ marginBottom: 8 }} />
-            <Text style={qa.label}>{a.label}</Text>
-            <Text style={qa.desc}>{a.desc}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <CustomAlert
-        visible={panicVisible}
-        title="Panic Block"
-        message="Are you sure you want to trigger a strict 5-minute hardware block on all social media?"
-        icon="lightning-bolt"
-        confirmLabel="Block Now"
-        cancelLabel="Cancel"
-        onConfirm={() => {
-          setPanicVisible(false);
-          triggerSuddenBlock(5);
-        }}
-        onCancel={() => setPanicVisible(false)}
-      />
-    </View>
-  );
-});
-
 const qa = StyleSheet.create({
-  btn: { flex: 1, backgroundColor: C.bgCard, borderWidth: 1, borderColor: C.border, borderRadius: R.card, padding: 16 },
-  label: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: C.text, marginBottom: 4 },
-  desc: { fontFamily: "Inter_400Regular", fontSize: 11, color: C.textMuted, lineHeight: 16 },
+  card: {
+    flexDirection: "row", alignItems: "center", gap: 14,
+    backgroundColor: C.bgCard, borderRadius: R.card,
+    borderWidth: 1, borderColor: C.border,
+    padding: 16, marginBottom: 10,
+  },
+  iconWrap: { width: 44, height: 44, borderRadius: 12, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  label: { fontFamily: "Nunito_700Bold", fontSize: 15, color: C.text, marginBottom: 2 },
+  desc: { fontFamily: "Nunito_400Regular", fontSize: 12, color: C.textMuted },
 });
 
 // ════════════════════════════════════════════════════════════════════════════
-// FEEDBACK REWARD PROMPT
+// REWARD TOAST
 // ════════════════════════════════════════════════════════════════════════════
 
-const FeedbackPrompt = memo(() => {
-  const { checkRewardTrigger, clearRewardTrigger, addRewardPoints } = useSettings();
-  const [visible, setVisible] = useState(false);
+const RewardToast = memo(({ visible, onDone }: { visible: boolean; onDone: () => void }) => {
+  const anim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    const poll = async () => {
-      const triggerTime = await checkRewardTrigger();
-      if (triggerTime > 0) {
-        const elapsed = Date.now() - triggerTime;
-        // If trigger was within the last 5 minutes, ask for feedback
-        if (elapsed < 5 * 60 * 1000) {
-           setVisible(true);
-        }
-        clearRewardTrigger();
-      }
-    };
-
-    const handleState = (state: AppStateStatus) => {
-      if (state === "active") poll();
-    };
-
-    const sub = AppState.addEventListener("change", handleState);
-    interval = setInterval(poll, 3000);
-    poll();
-
-    return () => {
-      sub.remove();
-      clearInterval(interval);
-    };
-  }, []);
+    if (visible) {
+      Animated.sequence([
+        Animated.spring(anim, { toValue: 1, useNativeDriver: true, tension: 80, friction: 8 }),
+        Animated.delay(2200),
+        Animated.timing(anim, { toValue: 0, duration: 320, useNativeDriver: true }),
+      ]).start(() => onDone());
+    }
+  }, [visible]);
 
   if (!visible) return null;
 
   return (
-    <View style={StyleSheet.absoluteFill}>
-      <View style={fb.overlay}>
-        <View style={fb.card}>
-          <MaterialCommunityIcons name="brain" size={40} color={C.amber} style={{ marginBottom: 16 }} />
-          <Text style={fb.title}>Neural Interception</Text>
-          <Text style={fb.desc}>I just diverted you from a short-form feed. How did I do?</Text>
-          
-          <TouchableOpacity 
-             style={fb.btnFlow} 
-             activeOpacity={0.8}
-             onPress={() => {
-               setVisible(false);
-               addRewardPoints(10);
-               Alert.alert("Elite Point Awarded", "+10 Points! Keep up the focus.");
-             }}
-          >
-             <MaterialCommunityIcons name="check-circle" size={20} color={C.bg} />
-             <Text style={fb.btnTextPrimary}>Perfect! Saved me.</Text>
-          </TouchableOpacity>
-
-           <TouchableOpacity 
-             style={fb.btnSecondary} 
-             activeOpacity={0.8}
-             onPress={() => {
-               setVisible(false);
-             }}
-          >
-             <Text style={fb.btnTextSec}>It missed it, I backed out manually.</Text>
-          </TouchableOpacity>
-
-           <TouchableOpacity 
-             style={fb.btnSecondary} 
-             activeOpacity={0.8}
-             onPress={() => {
-               setVisible(false);
-             }}
-          >
-             <Text style={fb.btnTextSec}>False positive (I wasn't scrolling).</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </View>
+    <Animated.View style={[rt.wrap, {
+      opacity: anim,
+      transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) }],
+    }]}>
+      <MaterialCommunityIcons name="star-four-points" size={18} color={C.accent} />
+      <Text style={rt.text}>+10 Elite Points — Focus protected!</Text>
+    </Animated.View>
   );
 });
 
-const fb = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.8)", justifyContent: "center", alignItems: "center", padding: 24, zIndex: 9999 },
-  card: { backgroundColor: C.bgCard, width: "100%", borderRadius: R.card, padding: 24, alignItems: "center", borderWidth: 1, borderColor: C.border },
-  title: { fontFamily: "Inter_700Bold", fontSize: 20, color: C.text, marginBottom: 8 },
-  desc: { fontFamily: "Inter_400Regular", fontSize: 13, color: C.textSub, textAlign: "center", marginBottom: 24, lineHeight: 20 },
-  btnFlow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: C.amber, width: "100%", paddingVertical: 14, borderRadius: 100, marginBottom: 12 },
-  btnTextPrimary: { fontFamily: "Inter_700Bold", fontSize: 15, color: C.bg },
-  btnSecondary: { backgroundColor: C.bgElevated, width: "100%", paddingVertical: 14, borderRadius: 100, alignItems: "center", marginBottom: 10, borderWidth: 1, borderColor: C.border },
-  btnTextSec: { fontFamily: "Inter_500Medium", fontSize: 13, color: C.textMuted },
+const rt = StyleSheet.create({
+  wrap: {
+    position: "absolute", bottom: 100, alignSelf: "center",
+    flexDirection: "row", alignItems: "center", gap: 10,
+    backgroundColor: C.bgCard, borderWidth: 1, borderColor: C.accentBorder,
+    borderRadius: 100, paddingVertical: 12, paddingHorizontal: 20,
+  },
+  text: { fontFamily: "Nunito_600SemiBold", fontSize: 14, color: C.accent },
 });
 
 // ════════════════════════════════════════════════════════════════════════════
 // MAIN SCREEN
 // ════════════════════════════════════════════════════════════════════════════
 
-export default memo(function DashboardScreen() {
+export default function DashboardScreen() {
+  const { settings, addRewardPoints } = useSettings();
+  const [serviceActive, setServiceActive] = useState(false);
+  const [stats, setStats] = useState({ shortsBlocked: 0, reelsBlocked: 0, adsSkipped: 0 });
+  const [rewardVisible, setRewardVisible] = useState(false);
+
+  const pollStats = useCallback(async () => {
+    try {
+      const active = await AccessibilityModule.isServiceEnabled();
+      setServiceActive(active);
+      const s = await (AccessibilityModule as any).getStats?.() ?? {};
+      setStats({
+        shortsBlocked: s.shortsBlocked ?? 0,
+        reelsBlocked:  s.reelsBlocked ?? 0,
+        adsSkipped:    s.adsSkipped ?? 0,
+      });
+      // Reward polling
+      const reward = await AccessibilityModule.getRewardTrigger();
+      if (reward > 0) {
+        AccessibilityModule.clearRewardTrigger();
+        addRewardPoints(10);
+        setRewardVisible(true);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    pollStats();
+    const interval = setInterval(pollStats, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const totalShielded = stats.shortsBlocked + stats.reelsBlocked;
+
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <SafeAreaView style={{ flex: 1 }}>
         <ScrollView
-          contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16 }}
+          contentContainerStyle={{ paddingHorizontal: S.pagePad, paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}
         >
-          <View style={{ marginBottom: 20 }}>
-            <Text style={{ fontFamily: "Inter_700Bold", fontSize: 24, color: C.text, letterSpacing: -0.5 }}>
-              Fresh Mind Elite
-            </Text>
-            <Text style={{ fontFamily: "Inter_400Regular", fontSize: 13, color: C.textMuted, marginTop: 4 }}>
-              Your digital wellness command center.
-            </Text>
+          {/* Header */}
+          <View style={{ paddingTop: 8, marginBottom: 4 }}>
+            <Text style={pr.greeting}>Fresh Mind</Text>
+            <Text style={pr.subtitle}>Your focus guardian</Text>
           </View>
 
-          <ShieldHero />
-          <StatsRow />
-          <CorePillars />
-          <QuickActions />
+          {/* Shield Hero */}
+          <ShieldHero active={serviceActive} />
 
-          <View style={{ height: 100 }} />
+          {/* Stats */}
+          <Text style={pr.sectionLabel}>Today's Shield Report</Text>
+          <View style={{ flexDirection: "row", gap: 10, marginBottom: S.sectionGap }}>
+            <StatCard icon="play-speed" value={stats.shortsBlocked} label={"Shorts\nBlocked"} color={C.accent} />
+            <StatCard icon="video-off" value={stats.reelsBlocked} label={"Reels\nBlocked"} color={C.success} />
+            <StatCard icon="skip-forward" value={stats.adsSkipped} label={"Ads\nSkipped"} color={C.info} />
+          </View>
+
+          {/* Reward Points */}
+          <View style={pr.rewardRow}>
+            <MaterialCommunityIcons name="star-circle" size={20} color={C.accent} />
+            <Text style={pr.rewardText}>{settings.usage.rewardPoints} Elite Points</Text>
+            <View style={pr.rewardBadge}>
+              <Text style={pr.rewardBadgeText}>Streak: {settings.usage.streakDays}d</Text>
+            </View>
+          </View>
+
+          {/* Quick Actions */}
+          <Text style={[pr.sectionLabel, { marginTop: 20 }]}>Features</Text>
+          <QuickAction
+            icon="shield-crown"
+            label="Shield Controls"
+            desc="Shorts, Reels, Ads, Strict Mode"
+            onPress={() => {}}
+          />
+          <QuickAction
+            icon="brain"
+            label="Mindset & Focus"
+            desc="Screen time, sleep, deep work"
+            onPress={() => {}}
+          />
+          <QuickAction
+            icon="arm-flex"
+            label="Workout"
+            desc="Exercise library, calculators"
+            onPress={() => {}}
+          />
+          <QuickAction
+            icon="calendar-check"
+            label="Daily Plan"
+            desc="Task timers, schedule"
+            onPress={() => {}}
+          />
+
+          {/* Service prompt if not active */}
+          {!serviceActive && (
+            <TouchableOpacity
+              style={pr.enableBanner}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                AccessibilityModule.openAccessibilitySettings();
+              }}
+              activeOpacity={0.85}
+            >
+              <MaterialCommunityIcons name="shield-alert" size={22} color={C.warn} />
+              <View style={{ flex: 1 }}>
+                <Text style={pr.enableTitle}>Shield needs permission</Text>
+                <Text style={pr.enableDesc}>Tap to enable the accessibility service</Text>
+              </View>
+              <MaterialCommunityIcons name="arrow-right" size={18} color={C.warn} />
+            </TouchableOpacity>
+          )}
         </ScrollView>
       </SafeAreaView>
-      
-      <FeedbackPrompt />
+
+      <RewardToast visible={rewardVisible} onDone={() => setRewardVisible(false)} />
     </View>
   );
+}
+
+const pr = StyleSheet.create({
+  greeting: { fontFamily: "Nunito_800ExtraBold", fontSize: 28, color: C.text, letterSpacing: -0.5 },
+  subtitle: { fontFamily: "Nunito_400Regular", fontSize: 14, color: C.textMuted, marginTop: 2 },
+  sectionLabel: {
+    fontFamily: "Nunito_700Bold", fontSize: 12, color: C.textMuted,
+    letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 12,
+  },
+  rewardRow: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    backgroundColor: C.bgCard, borderRadius: R.card,
+    borderWidth: 1, borderColor: C.accentBorder,
+    padding: 14,
+  },
+  rewardText: { fontFamily: "Nunito_700Bold", fontSize: 15, color: C.accent, flex: 1 },
+  rewardBadge: { backgroundColor: C.accentBg, borderRadius: R.circle, paddingVertical: 4, paddingHorizontal: 10 },
+  rewardBadgeText: { fontFamily: "Nunito_600SemiBold", fontSize: 12, color: C.accent },
+  enableBanner: {
+    flexDirection: "row", alignItems: "center", gap: 14,
+    backgroundColor: C.warnBg, borderRadius: R.card,
+    borderWidth: 1, borderColor: "rgba(200,149,108,0.3)",
+    padding: 16, marginTop: 16,
+  },
+  enableTitle: { fontFamily: "Nunito_700Bold", fontSize: 14, color: C.warn, marginBottom: 2 },
+  enableDesc: { fontFamily: "Nunito_400Regular", fontSize: 12, color: C.textSub },
 });

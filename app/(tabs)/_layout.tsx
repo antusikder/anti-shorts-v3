@@ -3,27 +3,27 @@ import { Tabs, router } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import React from "react";
 import { Platform, StyleSheet, View, TouchableOpacity } from "react-native";
-
+import { C } from "@/constants/colors";
 export default function TabLayout() {
   const isIOS = Platform.OS === "ios";
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: "#FFB300",
-        tabBarInactiveTintColor: "#555",
+        tabBarActiveTintColor: C.accent,
+        tabBarInactiveTintColor: C.textMuted,
         headerShown: false,
         tabBarStyle: {
           position: "absolute",
-          backgroundColor: isIOS ? "transparent" : "#0E0C1A",
+          backgroundColor: isIOS ? "transparent" : C.bg,
           borderTopWidth: 1,
-          borderTopColor: "rgba(255,255,255,0.06)",
+          borderTopColor: C.border,
           elevation: 0,
           height: 64,
           paddingBottom: 8,
         },
         tabBarLabelStyle: {
-          fontFamily: "Inter_600SemiBold",
+          fontFamily: "Nunito_700Bold",
           fontSize: 10,
           letterSpacing: 0.3,
         },
@@ -31,7 +31,7 @@ export default function TabLayout() {
           isIOS ? (
             <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
           ) : (
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: "#0E0C1A" }]} />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: C.bgOverlay }]} />
           ),
       }}
     >
@@ -88,15 +88,16 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="access"
+        name="plan"
         options={{
-          href: null, // Hidden — legacy, replaced by settings screen
-        }}
-      />
-      <Tabs.Screen
-        name="routine"
-        options={{
-          href: null, // Hidden — integrated into mindset
+          title: "Plan",
+          tabBarIcon: ({ color, focused }) => (
+            <MaterialCommunityIcons
+              name={focused ? "calendar-check" : "calendar-check-outline"}
+              size={24}
+              color={color}
+            />
+          ),
         }}
       />
     </Tabs>

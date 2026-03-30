@@ -1,336 +1,347 @@
-import React, { memo, useEffect, useState } from "react";
+import React, { memo, useCallback, useEffect, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Switch, AppState, AppStateStatus, Dimensions
+  Switch, Alert, Animated,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useSettings } from "@/context/SettingsContext";
 import { AccessibilityModule } from "@/modules/AccessibilityModule";
-import { C, R } from "@/constants/colors";
+import { C, R, S } from "@/constants/colors";
+
+// ════════════════════════════════════════════════════════════════════════════
+// REUSABLE COMPONENTS
+// ════════════════════════════════════════════════════════════════════════════
+
+const SectionCard = memo(({ children, style }: { children: React.ReactNode; style?: object }) => (
+  <View style={[sec.card, style]}>{children}</View>
+));
+
+const SectionHeader = memo(({ icon, title, subtitle }: { icon: string; title: string; subtitle?: string }) => (
+  <View style={sec.header}>
+    <View style={sec.iconBox}>
+      <MaterialCommunityIcons name={icon as any} size={18} color={C.accent} />
+    </View>
+    <View style={{ flex: 1 }}>
+      <Text style={sec.title}>{title}</Text>
+      {subtitle && <Text style={sec.subtitle}>{subtitle}</Text>}
+    </View>
+  </View>
+));
+
+const sec = StyleSheet.create({
+  card: {
+    backgroundColor: C.bgCard, borderRadius: R.card,
+    borderWidth: 1, borderColor: C.border,
+    padding: 18, marginBottom: 12,
+  },
+  header: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 16 },
+  iconBox: {
+    width: 38, height: 38, borderRadius: 11,
+    backgroundColor: C.accentBg, borderWidth: 1, borderColor: C.accentBorder,
+    alignItems: "center", justifyContent: "center",
+  },
+  title: { fontFamily: "Nunito_700Bold", fontSize: 16, color: C.text },
+  subtitle: { fontFamily: "Nunito_400Regular", fontSize: 12, color: C.textMuted, marginTop: 1 },
+});
+
+const ToggleRow = memo(({ label, description, value, onChange, indent }: {
+  label: string; description?: string; value: boolean;
+  onChange: (v: boolean) => void; indent?: boolean;
+}) => (
+  <View style={[tr.row, indent && { paddingLeft: 12 }]}>
+    <View style={{ flex: 1 }}>
+      <Text style={tr.label}>{label}</Text>
+      {description && <Text style={tr.desc}>{description}</Text>}
+    </View>
+    <Switch
+      value={value}
+      onValueChange={(v) => { Haptics.selectionAsync(); onChange(v); }}
+      trackColor={{ false: "rgba(255,255,255,0.08)", true: C.accentBg }}
+      thumbColor={value ? C.accent : C.textMuted}
+      ios_backgroundColor="rgba(255,255,255,0.08)"
+    />
+  </View>
+));
+
+const tr = StyleSheet.create({
+  row: { flexDirection: "row", alignItems: "center", paddingVertical: 12, borderTopWidth: 1, borderTopColor: C.border },
+  label: { fontFamily: "Nunito_600SemiBold", fontSize: 14, color: C.text, marginBottom: 2 },
+  desc: { fontFamily: "Nunito_400Regular", fontSize: 12, color: C.textMuted, lineHeight: 17 },
+});
 
 // ════════════════════════════════════════════════════════════════════════════
 // SERVICE STATUS HERO
 // ════════════════════════════════════════════════════════════════════════════
 
-const ServiceHero = memo(() => {
-  const { setServiceEnabled } = useSettings();
-  const [active, setActive] = useState(false);
-
-  useEffect(() => {
-    check();
-    const sub = AppState.addEventListener("change", (s: AppStateStatus) => {
-      if (s === "active") check();
-    });
-    return () => sub.remove();
-  }, []);
-
-  const check = async () => {
-    const enabled = await AccessibilityModule.isServiceEnabled();
-    setActive(enabled);
-    setServiceEnabled(enabled);
-  };
-
-  return (
-    <TouchableOpacity
-      style={[svc.card, active ? svc.cardOk : svc.cardBad]}
-      onPress={() => {
-        if (!active) AccessibilityModule.openAccessibilitySettings();
-      }}
-      activeOpacity={active ? 1 : 0.8}
-    >
-      <View style={svc.row}>
-        <View style={[svc.icon, { backgroundColor: active ? C.amberBg : C.dangerBg }]}>
-          <MaterialCommunityIcons
-            name={active ? "shield-check" : "shield-alert"}
-            size={24}
-            color={active ? C.amber : C.danger}
-          />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={svc.title}>Neural Engine {active ? "Running" : "Offline"}</Text>
-          <Text style={svc.sub}>
-            {active ? "Multi-model scanner is enforcing limits." : "Tap to enable accessibility service."}
-          </Text>
-        </View>
-        {active ? (
-          <View style={svc.livePulse} />
-        ) : (
-          <MaterialCommunityIcons name="arrow-right" size={20} color={C.danger} />
-        )}
-      </View>
-    </TouchableOpacity>
-  );
-});
-
-const svc = StyleSheet.create({
-  card: { borderRadius: R.card, padding: 18, marginBottom: 20, borderWidth: 1, backgroundColor: C.bgCard },
-  cardOk: { borderColor: C.amberBorder },
-  cardBad: { borderColor: C.dangerBorder },
-  row: { flexDirection: "row", alignItems: "center", gap: 14 },
-  icon: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center" },
-  title: { fontFamily: "Inter_600SemiBold", fontSize: 15, color: C.text, marginBottom: 2 },
-  sub: { fontFamily: "Inter_400Regular", fontSize: 12, color: C.textSub },
-  livePulse: { width: 10, height: 10, borderRadius: 5, backgroundColor: C.success },
-});
-
-// ════════════════════════════════════════════════════════════════════════════
-// MASTER CONTROLS
-// ════════════════════════════════════════════════════════════════════════════
-
-const ToggleRow = memo(({ label, desc, value, onValueChange, icon, indent }: {
-  label: string; desc?: string; value: boolean; onValueChange: (v: boolean) => void;
-  icon?: string; indent?: boolean;
-}) => (
-  <View style={[tc.wrapper, indent && { paddingLeft: 42 }]}>
-    <View style={tc.row}>
-      {icon && <MaterialCommunityIcons name={icon as any} size={20} color={C.amber} style={{ width: 26 }} />}
-      <View style={{ flex: 1 }}>
-        <Text style={tc.label}>{label}</Text>
-      </View>
-      <Switch
-        value={value}
-        onValueChange={(v) => { onValueChange(v); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
-        trackColor={{ false: "rgba(255,255,255,0.08)", true: C.amberBg }}
-        thumbColor={value ? C.amber : C.textMuted}
-      />
+const ServiceStatus = memo(({ active, onTap }: { active: boolean; onTap: () => void }) => (
+  <TouchableOpacity
+    style={[sv.card, { borderColor: active ? C.accentBorder : C.dangerBorder }]}
+    onPress={onTap}
+    activeOpacity={0.88}
+  >
+    <View style={[sv.dot, { backgroundColor: active ? C.success : C.danger }]} />
+    <View style={{ flex: 1 }}>
+      <Text style={sv.title}>{active ? "Accessibility Service: ON" : "Accessibility Service: OFF"}</Text>
+      <Text style={sv.desc}>{active ? "Protection is running in the background." : "Tap to grant accessibility permission."}</Text>
     </View>
-    {desc && <Text style={[tc.desc, { paddingLeft: icon ? 36 : 0 }]}>{desc}</Text>}
-  </View>
+    <MaterialCommunityIcons
+      name={active ? "check-circle" : "alert-circle"}
+      size={22}
+      color={active ? C.success : C.danger}
+    />
+  </TouchableOpacity>
 ));
 
-const MultiModelConfig = memo(() => {
-  const { settings, updateMethodToggles, updateScanSpeed } = useSettings();
-
-  const SpeedSelector = () => (
-    <View style={tc.speedRow}>
-      {(["balanced", "aggressive", "battery"] as const).map(speed => (
-        <TouchableOpacity
-          key={speed}
-          style={[tc.speedBtn, settings.scanSpeed === speed && tc.speedBtnActive]}
-          onPress={() => {
-            updateScanSpeed(speed);
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          }}
-          activeOpacity={0.8}
-        >
-          <Text style={[tc.speedText, settings.scanSpeed === speed && tc.speedTextActive]}>
-            {speed.charAt(0).toUpperCase() + speed.slice(1)}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
-
-  return (
-    <View style={tc.section}>
-      <Text style={tc.sectionTitle}>Multi-Model Interceptors</Text>
-      <View style={tc.card}>
-        <ToggleRow
-          icon="broom"
-          label="Method 1: Shelf Sweeper"
-          desc="Finds 'Shorts/Reels' containers and clicks 'Show less'."
-          value={settings.method1_sweeper}
-          onValueChange={(v) => updateMethodToggles("method1_sweeper", v)}
-        />
-        <View style={tc.divider} />
-        <ToggleRow
-          icon="target"
-          label="Method 2: The Sniper"
-          desc="Detects individual video nodes and clicks their specific menu."
-          value={settings.method2_sniper}
-          onValueChange={(v) => updateMethodToggles("method2_sniper", v)}
-        />
-        <View style={tc.divider} />
-        <ToggleRow
-          icon="vector-rectangle"
-          label="Method 3: Geometric Analyst"
-          desc="Detects vertical video frames natively via aspect ratio math."
-          value={settings.method3_geometric}
-          onValueChange={(v) => updateMethodToggles("method3_geometric", v)}
-        />
-        <View style={tc.divider} />
-        <ToggleRow
-          icon="keyboard-return"
-          label="Method 4: Back-Bouncer"
-          desc="Instantly bounces you out if you enter a Shorts/Reels tab/link."
-          value={settings.method4_bouncer}
-          onValueChange={(v) => updateMethodToggles("method4_bouncer", v)}
-        />
-      </View>
-
-      <Text style={[tc.sectionTitle, { marginTop: 8 }]}>Engine Speed</Text>
-      <View style={tc.card}>
-         <SpeedSelector />
-         <Text style={[tc.desc, { padding: 16, paddingTop: 0 }]}>
-           Aggressive = 80ms (Very Fast). Balanced = 150ms. Battery = 300ms. Keep on balanced unless experiencing lag.
-         </Text>
-      </View>
-    </View>
-  );
-});
-
-const PlatformToggles = memo(() => {
-  const { settings, updateYoutube, updateFacebook, updateInstagram, updateTiktok, updateMethodToggles, updateSystemEnabled, updateSkipAds } = useSettings();
-
-  return (
-    <View style={tc.section}>
-      <Text style={tc.sectionTitle}>Target Platforms</Text>
-      <View style={tc.card}>
-        <ToggleRow
-          icon="power" label="Master Shield" desc="Toggle entirely on/off."
-          value={settings.systemEnabled} onValueChange={updateSystemEnabled}
-        />
-        <View style={tc.divider} />
-        <ToggleRow
-          icon="youtube" label="YouTube" value={settings.youtube.enabled}
-          onValueChange={(v) => updateYoutube("enabled", v)}
-        />
-        <View style={tc.divider} />
-        <ToggleRow
-          icon="facebook" label="Facebook & Lite" value={settings.facebook.enabled}
-          onValueChange={(v) => updateFacebook("enabled", v)}
-        />
-        <View style={tc.divider} />
-        <ToggleRow
-          icon="instagram" label="Instagram" value={settings.instagram.enabled}
-          onValueChange={updateInstagram}
-        />
-        <View style={tc.divider} />
-        <ToggleRow
-          icon="music-note" label="TikTok" value={settings.tiktok.enabled}
-          onValueChange={updateTiktok}
-        />
-        <View style={tc.divider} />
-        <ToggleRow
-          icon="web" label="Browser Shield" desc="Active URL inspection for YT/FB/IG reels."
-          value={settings.browser_monitoring} onValueChange={(v) => updateMethodToggles("browser_monitoring", v)}
-        />
-        <View style={tc.divider} />
-        <ToggleRow
-          icon="fast-forward" label="Ad Skipper" desc="Auto-clicks 'Skip Ad' when visible."
-          value={settings.skipAds} onValueChange={updateSkipAds}
-        />
-      </View>
-    </View>
-  );
-});
-
-const tc = StyleSheet.create({
-  section: { marginBottom: 20 },
-  sectionTitle: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 },
-  card: { backgroundColor: C.bgCard, borderWidth: 1, borderColor: C.border, borderRadius: R.card, overflow: "hidden" },
-  wrapper: { paddingVertical: 14, paddingHorizontal: 16 },
-  row: { flexDirection: "row", alignItems: "center", gap: 10 },
-  label: { fontFamily: "Inter_500Medium", fontSize: 14, color: C.text },
-  desc: { fontFamily: "Inter_400Regular", fontSize: 12, color: C.textSub, marginTop: 4, lineHeight: 18 },
-  divider: { height: 1, backgroundColor: C.border, marginHorizontal: 16 },
-  speedRow: { flexDirection: "row", gap: 8, padding: 16 },
-  speedBtn: { flex: 1, alignItems: "center", paddingVertical: 10, borderRadius: R.button, backgroundColor: C.bgElevated, borderWidth: 1, borderColor: C.border },
-  speedBtnActive: { backgroundColor: C.amberBg, borderColor: C.amberBorder },
-  speedText: { fontFamily: "Inter_500Medium", fontSize: 12, color: C.textSub },
-  speedTextActive: { color: C.amber },
+const sv = StyleSheet.create({
+  card: {
+    flexDirection: "row", alignItems: "center", gap: 14,
+    backgroundColor: C.bgCard, borderRadius: R.card,
+    borderWidth: 1, padding: 16, marginBottom: 12,
+  },
+  dot: { width: 10, height: 10, borderRadius: 5 },
+  title: { fontFamily: "Nunito_700Bold", fontSize: 14, color: C.text, marginBottom: 2 },
+  desc: { fontFamily: "Nunito_400Regular", fontSize: 12, color: C.textMuted },
 });
 
 // ════════════════════════════════════════════════════════════════════════════
-// ALGORITHM SHAPER
+// STRICT MODE
 // ════════════════════════════════════════════════════════════════════════════
 
-const SHAPER_CATEGORIES = [
-  { id: "gaming", label: "Gaming", icon: "gamepad-variant" },
-  { id: "gossip", label: "Gossip", icon: "account-multiple" },
-  { id: "clickbait", label: "Clickbait", icon: "cursor-default-click" },
-  { id: "pranks", label: "Pranks", icon: "emoticon-lol" },
-  { id: "political", label: "Political", icon: "vote" },
-  { id: "nsfw", label: "NSFW", icon: "eye-off" },
-  { id: "mukbang", label: "Mukbang", icon: "food" },
-  { id: "asmr", label: "ASMR", icon: "ear-hearing" },
+const STRICT_APPS = [
+  { pkg: "com.google.android.youtube", name: "YouTube", icon: "youtube" },
+  { pkg: "com.facebook.katana",        name: "Facebook", icon: "facebook" },
+  { pkg: "com.facebook.orca",          name: "Messenger", icon: "message-text" },
+  { pkg: "com.whatsapp",               name: "WhatsApp", icon: "whatsapp" },
+  { pkg: "com.instagram.android",      name: "Instagram", icon: "instagram" },
+  { pkg: "com.android.chrome",         name: "Chrome", icon: "google-chrome" },
+  { pkg: "com.zhiliaoapp.musically",   name: "TikTok", icon: "music-note" },
+  { pkg: "com.reddit.frontpage",       name: "Reddit", icon: "reddit" },
 ];
 
-const AlgorithmShaper = memo(() => {
-  const [activeCategories, setActiveCategories] = useState<string[]>([]);
-
-  useEffect(() => {
-    if (activeCategories.length > 0) {
-      AccessibilityModule.updateSettings({
-        shaperCategories: activeCategories.join(","),
-      } as any);
+const StrictModeSection = memo(({
+  strictMode, setStrict, blockList, setBlockList,
+}: {
+  strictMode: boolean;
+  setStrict: (v: boolean) => void;
+  blockList: string[];
+  setBlockList: (l: string[]) => void;
+}) => {
+  const handleStartStrict = () => {
+    if (!strictMode) {
+      Alert.alert(
+        "Start Strict Mode",
+        "Strict mode will block all checked apps for 45 minutes. You won't be able to turn it off early.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Start 45 min", style: "destructive", onPress: () => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); setStrict(true); } },
+        ]
+      );
     } else {
-      AccessibilityModule.updateSettings({
-        shaperCategories: "",
-      } as any);
+      setStrict(false);
     }
-  }, [activeCategories]);
+  };
 
-  const toggleCategory = (id: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setActiveCategories(prev =>
-      prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]
+  const toggleApp = (pkg: string) => {
+    Haptics.selectionAsync();
+    setBlockList(
+      blockList.includes(pkg)
+        ? blockList.filter(p => p !== pkg)
+        : [...blockList, pkg]
     );
   };
 
   return (
-    <View style={tc.section}>
-      <Text style={tc.sectionTitle}>Algorithm Shaper</Text>
-      <View style={[tc.card, { padding: 16 }]}>
-        <Text style={[tc.desc, { marginTop: 0, marginBottom: 14 }]}>
-          Scanner will aggressively flag matching feed items as "Not interested" to retrain your algorithms.
-        </Text>
-        <View style={as.grid}>
-          {SHAPER_CATEGORIES.map(cat => {
-            const active = activeCategories.includes(cat.id);
-            return (
-              <TouchableOpacity
-                key={cat.id}
-                style={[as.chip, active && as.chipActive]}
-                onPress={() => toggleCategory(cat.id)}
-                activeOpacity={0.8}
-              >
-                <MaterialCommunityIcons name={cat.icon as any} size={16} color={active ? C.amber : C.textMuted} />
-                <Text style={[as.chipText, active && { color: C.amber }]}>{cat.label}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+    <SectionCard>
+      <SectionHeader icon="lock-clock" title="Strict Mode" subtitle="Block distracting apps for a set time" />
+
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
+        {STRICT_APPS.map(app => {
+          const selected = blockList.includes(app.pkg);
+          return (
+            <TouchableOpacity
+              key={app.pkg}
+              style={[sm.chip, selected && sm.chipActive]}
+              onPress={() => toggleApp(app.pkg)}
+              activeOpacity={0.8}
+            >
+              <MaterialCommunityIcons name={app.icon as any} size={14} color={selected ? C.accent : C.textMuted} />
+              <Text style={[sm.chipText, selected && { color: C.accent }]}>{app.name}</Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
-    </View>
+
+      <TouchableOpacity
+        style={[sm.button, strictMode && sm.buttonActive]}
+        onPress={handleStartStrict}
+        activeOpacity={0.85}
+      >
+        <MaterialCommunityIcons
+          name={strictMode ? "lock-open-variant" : "lock"}
+          size={18} color={strictMode ? C.text : C.bg}
+        />
+        <Text style={[sm.buttonText, strictMode && { color: C.text }]}>
+          {strictMode ? "End Strict Mode" : "Start Strict Mode (45 min)"}
+        </Text>
+      </TouchableOpacity>
+    </SectionCard>
   );
 });
 
-const as = StyleSheet.create({
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chip: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: R.circle, backgroundColor: C.bgElevated, borderWidth: 1, borderColor: C.border },
-  chipActive: { backgroundColor: C.amberBg, borderColor: C.amberBorder },
-  chipText: { fontFamily: "Inter_500Medium", fontSize: 13, color: C.textMuted },
+const sm = StyleSheet.create({
+  chip: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingVertical: 7, paddingHorizontal: 12, borderRadius: R.circle,
+    backgroundColor: C.bgElevated, borderWidth: 1, borderColor: C.border,
+  },
+  chipActive: { backgroundColor: C.accentBg, borderColor: C.accentBorder },
+  chipText: { fontFamily: "Nunito_600SemiBold", fontSize: 12, color: C.textMuted },
+  button: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 8, paddingVertical: 14, borderRadius: R.button,
+    backgroundColor: C.accent,
+  },
+  buttonActive: { backgroundColor: C.bgElevated, borderWidth: 1, borderColor: C.borderMid },
+  buttonText: { fontFamily: "Nunito_700Bold", fontSize: 14, color: C.bg },
 });
 
 // ════════════════════════════════════════════════════════════════════════════
 // MAIN SCREEN
 // ════════════════════════════════════════════════════════════════════════════
 
-export default memo(function ShieldScreen() {
+export default function ShieldScreen() {
+  const {
+    settings, updateYoutube, updateFacebook, updateInstagram,
+    updateSkipAds, updateSystemEnabled, setBlockActive, updateBlockList,
+  } = useSettings();
+
+  const [serviceActive, setServiceActive] = useState(false);
+  const [strictMode, setStrictModeLocal] = useState(false);
+
+  // Poll service status
+  useEffect(() => {
+    const check = async () => {
+      const active = await AccessibilityModule.isServiceEnabled();
+      setServiceActive(active);
+    };
+    check();
+    const t = setInterval(check, 4000);
+    return () => clearInterval(t);
+  }, []);
+
+  const handleStrictToggle = useCallback((enabled: boolean) => {
+    const endTime = Date.now() + 45 * 60 * 1000;
+    setStrictModeLocal(enabled);
+    setBlockActive(enabled);
+    AccessibilityModule.updateSettings({
+      strictMode:   enabled,
+      strictEndTime: enabled ? endTime : 0,
+      strictPackages: settings.blockList.join(","),
+    });
+  }, [settings.blockList]);
+
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <SafeAreaView style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16 }} showsVerticalScrollIndicator={false}>
-          <View style={{ marginBottom: 24 }}>
-            <Text style={{ fontFamily: "Inter_700Bold", fontSize: 28, color: C.text, letterSpacing: -0.5 }}>
-              Neural Shield
-            </Text>
-            <Text style={{ fontFamily: "Inter_400Regular", fontSize: 14, color: C.textSub, marginTop: 4 }}>
-              Configure the multi-model interception engine.
-            </Text>
+        <ScrollView
+          contentContainerStyle={{ paddingHorizontal: S.pagePad, paddingBottom: 100 }}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Header */}
+          <View style={{ paddingTop: 8, marginBottom: 20 }}>
+            <Text style={pr.heading}>Shield</Text>
+            <Text style={pr.subheading}>Content blocking & protection controls</Text>
           </View>
 
-          <ServiceHero />
-          <MultiModelConfig />
-          <PlatformToggles />
-          <AlgorithmShaper />
+          {/* Service Status */}
+          <ServiceStatus
+            active={serviceActive}
+            onTap={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              AccessibilityModule.openAccessibilitySettings();
+            }}
+          />
 
-          <View style={{ height: 100 }} />
+          {/* Master toggle */}
+          <SectionCard>
+            <SectionHeader icon="shield-crown" title="Master Shield" subtitle="Enable or disable all protection" />
+            <ToggleRow
+              label="System Protection"
+              description="Master switch — controls everything"
+              value={settings.systemEnabled}
+              onChange={(v) => { updateSystemEnabled(v); AccessibilityModule.updateSettings({ enabled: v }); }}
+            />
+          </SectionCard>
+
+          {/* YouTube */}
+          <SectionCard>
+            <SectionHeader icon="youtube" title="YouTube" />
+            <ToggleRow
+              label="Remove Shorts (Menu Method)"
+              description='When a Shorts menu appears, auto-click "Not interested"'
+              value={settings.youtube.removeShorts}
+              onChange={(v) => { updateYoutube("removeShorts", v); AccessibilityModule.updateSettings({ removeShorts: v }); }}
+            />
+            <ToggleRow
+              label="Back-Bounce from Shorts"
+              description="Instantly navigate back if a Shorts player is detected"
+              value={settings.youtube.autoBack}
+              onChange={(v) => { updateYoutube("autoBack", v); AccessibilityModule.updateSettings({ backBounce: v }); }}
+              indent
+            />
+            <ToggleRow
+              label="Skip Ads"
+              description="Automatically tap Skip Ad when available"
+              value={settings.skipAds}
+              onChange={(v) => { updateSkipAds(v); AccessibilityModule.updateSettings({ skipAds: v }); }}
+            />
+          </SectionCard>
+
+          {/* Facebook */}
+          <SectionCard>
+            <SectionHeader icon="facebook" title="Facebook" />
+            <ToggleRow
+              label="Block Reels"
+              description="Back-bounce from Reels player + menu heuristic"
+              value={settings.facebook.removeReels}
+              onChange={(v) => { updateFacebook("removeReels", v); AccessibilityModule.updateSettings({ removeReels: v }); }}
+            />
+            <ToggleRow
+              label="Auto-back from Reels"
+              description="Immediately navigate away when Reels feed is detected"
+              value={settings.facebook.autoBack}
+              onChange={(v) => { updateFacebook("autoBack", v); AccessibilityModule.updateSettings({ backBounce: v }); }}
+              indent
+            />
+          </SectionCard>
+
+          {/* Instagram */}
+          <SectionCard>
+            <SectionHeader icon="instagram" title="Instagram" />
+            <ToggleRow
+              label="Block Reels"
+              description="Back-bounce from Reels / Clips player"
+              value={settings.instagram.enabled}
+              onChange={(v) => { updateInstagram(v); AccessibilityModule.updateSettings({ removeReels: v }); }}
+            />
+          </SectionCard>
+
+          {/* Strict Mode */}
+          <StrictModeSection
+            strictMode={strictMode}
+            setStrict={handleStrictToggle}
+            blockList={settings.blockList}
+            setBlockList={updateBlockList}
+          />
         </ScrollView>
       </SafeAreaView>
     </View>
   );
+}
+
+const pr = StyleSheet.create({
+  heading: { fontFamily: "Nunito_800ExtraBold", fontSize: 28, color: C.text, letterSpacing: -0.5 },
+  subheading: { fontFamily: "Nunito_400Regular", fontSize: 14, color: C.textMuted, marginTop: 4 },
 });
