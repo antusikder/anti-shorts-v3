@@ -26,6 +26,7 @@ export interface Exercise {
   difficulty: "beginner" | "intermediate" | "advanced";
   steps: string[];
   tips: string[];
+  benefits?: string[];
   sets?: { sets: number; reps: string; rest: string };
 }
 
@@ -37,6 +38,7 @@ export const EXERCISES: Exercise[] = [
     difficulty: "intermediate",
     steps: ["Lie flat on bench, grip bar slightly wider than shoulders", "Unrack bar, lower to mid-chest slowly", "Press bar back up explosively", "Lock out elbows at top"],
     tips: ["Keep shoulder blades retracted", "Drive feet into floor", "Don't bounce bar off chest"],
+    benefits: ["Builds upper body strength", "Develops chest, shoulders, and triceps", "Improves bone density"],
     sets: { sets: 4, reps: "6-10", rest: "2-3 min" }
   },
   {
@@ -45,6 +47,7 @@ export const EXERCISES: Exercise[] = [
     difficulty: "beginner",
     steps: ["Lie on bench, hold dumbbells at chest level", "Press up and slightly in", "Lower with control to start"],
     tips: ["Greater range of motion than barbell", "Neutral grip reduces shoulder stress"],
+    benefits: ["Fixes muscle imbalances", "Increases range of motion", "Safer for shoulders"],
     sets: { sets: 3, reps: "8-12", rest: "90 sec" }
   },
   {
@@ -61,6 +64,7 @@ export const EXERCISES: Exercise[] = [
     difficulty: "beginner",
     steps: ["Start in high plank position", "Lower chest to ground, elbows 45°", "Push up explosively"],
     tips: ["Keep core braced", "Full range of motion", "Elevate feet for more chest emphasis"],
+    benefits: ["Zero equipment needed", "Builds functional core strength", "Improves shoulder stability"],
     sets: { sets: 3, reps: "15-25", rest: "60 sec" }
   },
   {
@@ -86,6 +90,7 @@ export const EXERCISES: Exercise[] = [
     difficulty: "intermediate",
     steps: ["Dead hang from bar, overhand grip", "Pull chin above bar by driving elbows down", "Lower with control"],
     tips: ["Full dead hang before next rep", "Avoid kipping for strength gains"],
+    benefits: ["Ultimate upper body pull strength", "Builds V-taper physique", "Improves grip strength"],
     sets: { sets: 4, reps: "6-12", rest: "2 min" }
   },
   {
@@ -102,6 +107,7 @@ export const EXERCISES: Exercise[] = [
     difficulty: "intermediate",
     steps: ["Hip hinge, back at ~45°", "Pull bar to lower chest", "Lower with control"],
     tips: ["Keep back flat", "Don't use too much body English"],
+    benefits: ["Builds back thickness", "Improves posture", "Strengthens lower back"],
     sets: { sets: 4, reps: "6-10", rest: "2 min" }
   },
   {
@@ -126,6 +132,7 @@ export const EXERCISES: Exercise[] = [
     difficulty: "intermediate",
     steps: ["Bar over mid-foot, grip just outside legs", "Brace core, drive hips forward", "Keep bar close to body throughout", "Lock out at top with hips and knees"],
     tips: ["Don't round lower back", "Think 'push floor away' not 'pull bar up'"],
+    benefits: ["Full body power", "Massive hormone response", "Strengthens posterior chain"],
     sets: { sets: 3, reps: "4-6", rest: "3 min" }
   },
   // ── SHOULDERS ─────────────────────────────────────────────────────────────────
@@ -234,6 +241,7 @@ export const EXERCISES: Exercise[] = [
     difficulty: "intermediate",
     steps: ["Bar on upper back, stance slightly wider than hips", "Break at hips and knees simultaneously", "Squat to parallel or below", "Drive up through heels"],
     tips: ["Knees track over toes", "Maintain neutral spine throughout", "Brace core hard"],
+    benefits: ["The king of leg exercises", "Improves mobility", "Increases metabolic rate"],
     sets: { sets: 4, reps: "5-8", rest: "2-3 min" }
   },
   {

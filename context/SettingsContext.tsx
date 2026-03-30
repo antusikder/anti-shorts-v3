@@ -40,6 +40,11 @@ export interface Settings {
   tiktok: {
     enabled: boolean;
   };
+  method1_sweeper: boolean;
+  method2_sniper: boolean;
+  method3_geometric: boolean;
+  method4_bouncer: boolean;
+  browser_monitoring: boolean;
   scanSpeed: ScanSpeed;
   feedMode: FeedMode;
   bedtime: BedtimeSettings;
@@ -103,6 +108,11 @@ const defaultSettings: Settings = {
   },
   instagram: { enabled: true },
   tiktok: { enabled: true },
+  method1_sweeper: true,
+  method2_sniper: true,
+  method3_geometric: true,
+  method4_bouncer: true,
+  browser_monitoring: true,
   scanSpeed: "balanced",
   feedMode: "off",
   bedtime: {
@@ -164,6 +174,7 @@ interface SettingsContextType {
   updateInstagram: (value: boolean) => void;
   updateTiktok: (value: boolean) => void;
   updateSkipAds: (value: boolean) => void;
+  updateMethodToggles: (key: "method1_sweeper" | "method2_sniper" | "method3_geometric" | "method4_bouncer" | "browser_monitoring", value: boolean) => void;
   updateSystemEnabled: (value: boolean) => void;
   updateScanSpeed: (speed: ScanSpeed) => void;
   updateFeedMode: (mode: FeedMode) => void;
@@ -177,8 +188,11 @@ interface SettingsContextType {
   updateWorkout: (data: Partial<Settings["workout"]>) => void;
   updateNutrition: (data: Partial<Settings["nutrition"]>) => void;
   updateUsage: (data: Partial<Settings["usage"]>) => void;
+  addRewardPoints: (points: number) => void;
   resetStats: () => void;
   triggerSuddenBlock: (minutes: number) => void;
+  checkRewardTrigger: () => Promise<number>;
+  clearRewardTrigger: () => void;
   isLoaded: boolean;
 }
 
@@ -219,6 +233,11 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           facebook: { ...defaultSettings.facebook, ...parsed.facebook },
           instagram: { ...defaultSettings.instagram, ...parsed.instagram },
           tiktok: { ...defaultSettings.tiktok, ...parsed.tiktok },
+          method1_sweeper: parsed.method1_sweeper ?? true,
+          method2_sniper: parsed.method2_sniper ?? true,
+          method3_geometric: parsed.method3_geometric ?? true,
+          method4_bouncer: parsed.method4_bouncer ?? true,
+          browser_monitoring: parsed.browser_monitoring ?? true,
           bedtime: { ...defaultSettings.bedtime, ...parsed.bedtime },
           privacy: { ...defaultSettings.privacy, ...parsed.privacy },
           stats: { ...defaultSettings.stats, ...parsed.stats },
@@ -256,6 +275,11 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       skipAds: s.skipAds,
       systemEnabled: s.systemEnabled,
       scanIntervalMs: SCAN_SPEED_MAP[s.scanSpeed],
+      method1_sweeper: s.method1_sweeper,
+      method2_sniper: s.method2_sniper,
+      method3_geometric: s.method3_geometric,
+      method4_bouncer: s.method4_bouncer,
+      browser_monitoring: s.browser_monitoring,
       feedMode: s.feedMode,
       blockActive: s.blockActive,
       blockedApps: s.blockList.join(","),
@@ -305,6 +329,12 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
 
   const updateSkipAds = useCallback(
     (value: boolean) => update((p) => ({ ...p, skipAds: value })),
+    [update]
+  );
+
+  const updateMethodToggles = useCallback(
+    (key: "method1_sweeper" | "method2_sniper" | "method3_geometric" | "method4_bouncer" | "browser_monitoring", value: boolean) =>
+      update((p) => ({ ...p, [key]: value })),
     [update]
   );
 
@@ -412,6 +442,14 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     [update]
   );
 
+  const addRewardPoints = useCallback(
+    (points: number) => update((p) => ({ ...p, usage: { ...p.usage, rewardPoints: p.usage.rewardPoints + points } })),
+    [update]
+  );
+
+  const checkRewardTrigger = async () => AccessibilityModule.getRewardTrigger();
+  const clearRewardTrigger = () => AccessibilityModule.clearRewardTrigger();
+
   return (
     <SettingsContext.Provider
       value={{
@@ -421,6 +459,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         updateInstagram,
         updateTiktok,
         updateSkipAds,
+        updateMethodToggles,
         updateSystemEnabled,
         updateScanSpeed,
         updateFeedMode,
@@ -434,8 +473,11 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         updateWorkout,
         updateNutrition,
         updateUsage,
+        addRewardPoints,
         resetStats,
         triggerSuddenBlock,
+        checkRewardTrigger,
+        clearRewardTrigger,
         isLoaded,
       }}
     >

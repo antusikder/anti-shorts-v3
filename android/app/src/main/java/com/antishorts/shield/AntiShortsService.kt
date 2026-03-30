@@ -1,318 +1,443 @@
 package com.antishorts.shield
 
 import android.accessibilityservice.AccessibilityService
-import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Context
 import android.content.SharedPreferences
-import android.os.Handler
-import android.os.Looper
+import android.graphics.Rect
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 
-/**
- * FreshMindService — Safe, throttled accessibility scanner v5.0
- *
- * SAFETY RULES (enforced in code):
- * 1. Never call rootInActiveWindow in a loop
- * 2. Always null-check every AccessibilityNodeInfo
- * 3. Always recycle() every node after use
- * 4. Minimum 800ms between any action
- * 5. Hard package whitelist — ignore everything else
- * 6. No deep recursion — max 4 levels
- * 7. One action per event — never chain actions
- * 8. No isDestroyed — not in this API level
- */
 class AntiShortsService : AccessibilityService() {
 
-    private val TAG = "FreshMindService"
-
     private lateinit var prefs: SharedPreferences
-    private lateinit var handler: Handler
-
-    // Throttle state
     private var lastActionTime = 0L
-    private val MIN_ACTION_INTERVAL_MS = 800L
 
-    // Cached prefs (avoid disk reads on every event)
-    private var systemEnabled = true
-    private var ytEnabled = true
-    private var ytRemoveShorts = true
+    private var systemEnabled = false
+    private var scanIntervalMs = 150L
     private var skipAds = true
-    private var fbEnabled = true
-    private var fbRemoveReels = true
-    private var igEnabled = true
-    private var suddenBlockEndTime = 0L
+    
+    private var ytEnabled = true
+    private var ytShorts = true
+    private var ytAutoBack = true
+    
+    // Multi-Method Arsenals (V5.1 & V6)
+    private var method1Sweeper = true
+    private var method2Sniper = true
+    private var method3Geometric = true
+    private var method4Bouncer = true
+    private var method5Neural = true
+    
+    private var browserMonitoring = true
+    private var panicMode = false
+    private var panicEndTime = 0L
 
-    // Package whitelist
-    private val SUPPORTED_PACKAGES = setOf(
-        "com.google.android.youtube",
-        "com.facebook.katana",
-        "com.facebook.lite",
-        "com.instagram.android",
-        "com.zhiliaoapp.musically",
-        "com.ss.android.ugc.trill",
-        "com.reddit.frontpage",
-        "com.twitter.android",
-        "com.snapchat.android"
-    )
-
-    // Prefs reload interval (ms) — don't read disk every event
-    private var lastPrefsLoad = 0L
-    private val PREFS_CACHE_MS = 2000L
+    private var shaperCategories = listOf<String>()
+    private var blockedApps = listOf<String>()
 
     override fun onServiceConnected() {
-        super.onServiceConnected()
-        Log.i(TAG, "FreshMind Service Connected v5.0")
-        prefs = applicationContext.getSharedPreferences(
-            AntiShortsService.PREFS_NAME, Context.MODE_PRIVATE
-        )
-        handler = Handler(Looper.getMainLooper())
-        loadPrefs()
-
-        val info = AccessibilityServiceInfo().apply {
-            eventTypes = AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED or
-                         AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
-            feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
-            packageNames = SUPPORTED_PACKAGES.toTypedArray()
-            notificationTimeout = 200
-            flags = AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
-                    AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
-        }
-        this.serviceInfo = info
+        Log.i(TAG, "AntiShortsService Connected")
+        prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.registerOnSharedPreferenceChangeListener { _, _ -> loadSettings() }
+        loadSettings()
     }
 
-    private fun loadPrefs() {
-        val now = System.currentTimeMillis()
-        if (now - lastPrefsLoad < PREFS_CACHE_MS) return
-        lastPrefsLoad = now
+    private fun loadSettings() {
         systemEnabled = prefs.getBoolean(PREF_SYSTEM_ENABLED, true)
-        ytEnabled = prefs.getBoolean(PREF_YT_ENABLED, true)
-        ytRemoveShorts = prefs.getBoolean(PREF_YT_SHORTS, true)
+        scanIntervalMs = prefs.getLong(PREF_SCAN_INTERVAL, 150L)
         skipAds = prefs.getBoolean(PREF_SKIP_ADS, true)
-        fbEnabled = prefs.getBoolean(PREF_FB_ENABLED, true)
-        fbRemoveReels = prefs.getBoolean(PREF_FB_REELS, true)
-        igEnabled = prefs.getBoolean(PREF_IG_ENABLED, true)
-        suddenBlockEndTime = prefs.getLong(PREF_SUDDEN_BLOCK, 0L)
+        
+        ytEnabled = prefs.getBoolean(PREF_YT_ENABLED, true)
+        ytShorts = prefs.getBoolean(PREF_YT_SHORTS, true)
+        ytAutoBack = prefs.getBoolean(PREF_YT_AUTO_BACK, true)
+        
+        method1Sweeper = prefs.getBoolean("method1_sweeper", true)
+        method2Sniper = prefs.getBoolean("method2_sniper", true)
+        method3Geometric = prefs.getBoolean("method3_geometric", true)
+        method4Bouncer = prefs.getBoolean("method4_bouncer", true)
+        method5Neural = prefs.getBoolean("method5_neural", true)
+        browserMonitoring = prefs.getBoolean("browser_monitoring", true)
+        
+        panicMode = prefs.getBoolean("panic_mode", false)
+        panicEndTime = prefs.getLong("panic_end_time", 0L)
+
+        val shaperRaw = prefs.getString("shaperCategories", "") ?: ""
+        shaperCategories = if (shaperRaw.isNotBlank()) shaperRaw.split(",") else emptyList()
+
+        if (prefs.getBoolean(PREF_BLOCK_ACTIVE, false)) {
+            val raw = prefs.getString(PREF_BLOCKED_APPS, "") ?: ""
+            blockedApps = if (raw.isNotBlank()) raw.split(",") else emptyList()
+        } else {
+            blockedApps = emptyList()
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
-        val now = System.currentTimeMillis()
-
-        // Throttle events
-        if (now - lastActionTime < MIN_ACTION_INTERVAL_MS) return
-
-        // Load cached prefs
-        loadPrefs()
-
-        // Panic mode — boot to home
-        if (suddenBlockEndTime > now) {
-            performGlobalAction(GLOBAL_ACTION_HOME)
-            lastActionTime = now
-            Log.d(TAG, "Panic mode active — sent to home")
-            return
-        }
-
         if (!systemEnabled) return
 
-        val pkg = event.packageName?.toString() ?: return
-        if (!SUPPORTED_PACKAGES.contains(pkg)) return
-
-        // Get root safely — ONE call per event
-        val root = rootInActiveWindow ?: return
-
-        try {
-            when (pkg) {
-                "com.google.android.youtube" -> handleYouTube(root, now)
-                "com.facebook.katana", "com.facebook.lite" -> handleFacebook(root, now)
-                "com.instagram.android" -> handleInstagram(root, now)
-                "com.zhiliaoapp.musically", "com.ss.android.ugc.trill" -> handleTikTok(root, now)
+        // Check Hardware Panic
+        val now = System.currentTimeMillis()
+        if (panicMode) {
+            if (now < panicEndTime) {
+                enforcePanicBlock()
+                return // Absolute interception. Cannot bypass.
+            } else {
+                panicMode = false
+                prefs.edit().putBoolean("panic_mode", false).apply()
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Handler exception: ${e.message}")
-        } finally {
-            safeRecycle(root)
+        }
+
+        val rootNode = rootInActiveWindow ?: return
+        
+        if (now - lastActionTime < scanIntervalMs) {
+            return rootNode.recycle()
+        }
+
+        val pkg = event.packageName?.toString() ?: ""
+
+        if (blockedApps.contains(pkg)) {
+            performSafeBack("Blocked App Hit")
+            return rootNode.recycle()
+        }
+
+        when (pkg) {
+            "com.google.android.youtube" -> handleYouTubeApp(rootNode)
+            "com.facebook.katana", "com.facebook.lite" -> handleFacebookApp(rootNode)
+            "com.instagram.android" -> handleInstagramApp(rootNode)
+            "com.android.chrome", "org.mozilla.firefox", "com.sec.android.app.sbrowser" -> handleBrowserApp(rootNode)
+            else -> {
+                // Background Neural Analyzer for obscure apps/players
+                if (method5Neural) {
+                    if (performNeuralAnalysis(rootNode, 0)) {
+                        performSafeBack("M5_Neural: Universal intercept")
+                        incrementStat("reelsRejectedToday")
+                    }
+                }
+            }
+        }
+
+        rootNode.recycle()
+    }
+
+    private fun enforcePanicBlock() {
+        val now = System.currentTimeMillis()
+        if (now - lastActionTime > ACTION_COOLDOWN_MS) {
+            performGlobalAction(GLOBAL_ACTION_HOME)
+            Log.w(TAG, "PANIC LOCKDOWN: Overriding all intents.")
+            lastActionTime = now
         }
     }
 
-    // ─── YouTube ────────────────────────────────────────────────────────────────
+    private fun handleYouTubeApp(rootNode: AccessibilityNodeInfo) {
+        if (!ytEnabled) return
 
-    private fun handleYouTube(root: AccessibilityNodeInfo, now: Long) {
-        // 1. Check if viewing Shorts player
-        if (ytRemoveShorts && isViewingYouTubeShort(root)) {
-            Log.d(TAG, "YouTube Shorts detected — going back")
-            performGlobalAction(GLOBAL_ACTION_BACK)
-            lastActionTime = now
-            recordStat("shortsShieldedToday")
+        if (method4Bouncer && ytAutoBack && nodeExistsByViewId(rootNode, "com.google.android.youtube:id/shorts_player_view")) {
+            performSafeBack("M4_Bouncer: Direct Shorts Player Hook")
+            incrementStat("shortsRejectedToday")
             return
         }
 
-        // 2. Skip ads
         if (skipAds) {
-            val skipped = trySkipAd(root)
-            if (skipped) {
-                lastActionTime = now
-                recordStat("adsRemovedToday")
+            // Safe array, excluding 'Close' to avoid hover player breaks
+            val hasAdProgress = recursiveFindById(rootNode, listOf("com.google.android.youtube:id/ad_progress", "ad_countdown"))
+            if(hasAdProgress || recursiveFindByTextExact(rootNode, listOf("Skip Ad", "Skip ads", "Skip navigation"))) {
+               if(clickNodesByText(rootNode, listOf("Skip Ad", "Skip ads", "Skip navigation", "No thanks"))) {
+                   incrementStat("adsRemovedToday")
+               }
+            }
+        }
+
+        if (ytShorts) {
+            if (method1Sweeper) {
+                method1ShelfSweeper(rootNode, listOf("Shorts"))
+            }
+            if (method2Sniper) {
+                if (clickNodesByText(rootNode, listOf("Not interested", "Don't recommend channel"))) {
+                    lastActionTime = System.currentTimeMillis()
+                }
+            }
+            if (method3Geometric) {
+                if(assessGeometricFrames(rootNode, 0)) {
+                    performSafeBack("M3_Geometric: Height > Width Shorts ratio detected.")
+                    incrementStat("shortsRejectedToday")
+                    return
+                }
+            }
+        }
+    }
+
+    private fun handleFacebookApp(rootNode: AccessibilityNodeInfo) {
+        if (method1Sweeper) {
+            method1ShelfSweeper(rootNode, listOf("Reels and short videos", "Reels"))
+        }
+
+        if (method4Bouncer) {
+            if (nodeExistsByViewId(rootNode, "com.facebook.katana:id/reels_tab") ||
+                nodeExistsByViewId(rootNode, "com.facebook.katana:id/viewer_container")) {
+                performSafeBack("M4_Bouncer: Facebook Viewer Tab Hook")
+                incrementStat("reelsRejectedToday")
+                return
+            }
+        }
+
+        if (method2Sniper) {
+            clickNodesByText(rootNode, listOf("Show fewer", "Hide reel"))
+        }
+
+        if (method5Neural) {
+            if (performNeuralAnalysis(rootNode, 0)) {
+                performSafeBack("M5_Neural: Intercepted FB reel via depth-anchor heuristics")
+                incrementStat("reelsRejectedToday")
                 return
             }
         }
     }
 
-    private fun isViewingYouTubeShort(root: AccessibilityNodeInfo): Boolean {
-        // Method 1: Check by viewId (most reliable)
-        val shortsIds = listOf("shorts_player", "reel_recycler", "shorts_shelf")
-        for (id in shortsIds) {
-            val nodes = root.findAccessibilityNodeInfosByViewId("com.google.android.youtube:id/$id")
-            if (nodes != null && nodes.isNotEmpty()) {
-                nodes.forEach { safeRecycle(it) }
-                return true
+    private fun handleInstagramApp(rootNode: AccessibilityNodeInfo) {
+        if (method4Bouncer && nodeExistsByViewId(rootNode, "com.instagram.android:id/clips_video_container")) {
+            performSafeBack("M4_Bouncer: Instagram Clips Hook")
+            incrementStat("reelsRejectedToday")
+            return
+        }
+        
+        if (method3Geometric) {
+            if(assessGeometricFrames(rootNode, 0)) {
+                performSafeBack("M3_Geometric: Fullscreen IG Reel blocked")
+                incrementStat("reelsRejectedToday")
+                return
             }
         }
+    }
 
-        // Method 2: Check content description "Shorts" on a current tab/button
-        val shortsTabs = root.findAccessibilityNodeInfosByText("Shorts")
-        if (shortsTabs != null) {
-            for (node in shortsTabs) {
-                val isSelected = node.isSelected
-                val viewId = node.viewIdResourceName ?: ""
-                safeRecycle(node)
-                if (isSelected && viewId.contains("tab")) return true
+    private fun handleBrowserApp(rootNode: AccessibilityNodeInfo) {
+        if (!browserMonitoring) return
+
+        val urlBox = rootNode.findAccessibilityNodeInfosByViewId("com.android.chrome:id/url_bar").firstOrNull()
+            ?: rootNode.findAccessibilityNodeInfosByViewId("org.mozilla.firefox:id/mozac_browser_toolbar_url_view").firstOrNull()
+            ?: rootNode.findAccessibilityNodeInfosByViewId("com.sec.android.app.sbrowser:id/location_bar_edit_text").firstOrNull()
+
+        urlBox?.text?.toString()?.toLowerCase()?.let { url ->
+            if (url.contains("youtube.com/shorts") || url.contains("facebook.com/reels") || url.contains("instagram.com/reels")) {
+                performSafeBack("M4_Bouncer: URL Regex Trap Hook")
+                incrementStat(if (url.contains("shorts")) "shortsRejectedToday" else "reelsRejectedToday")
             }
         }
-
-        return false
+        urlBox?.recycle()
     }
-
-    private fun trySkipAd(root: AccessibilityNodeInfo): Boolean {
-        val skipTexts = listOf("Skip Ad", "Skip ads", "Skip")
-        for (text in skipTexts) {
-            val nodes = root.findAccessibilityNodeInfosByText(text)
-            if (nodes != null) {
-                for (node in nodes) {
-                    val clickable = findClickableParent(node, 3)
-                    if (clickable != null) {
-                        clickable.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                        safeRecycle(clickable)
-                        nodes.forEach { safeRecycle(it) }
-                        return true
-                    }
-                    safeRecycle(node)
-                }
-            }
-        }
-        return false
-    }
-
-    // ─── Facebook ───────────────────────────────────────────────────────────────
-
-    private fun handleFacebook(root: AccessibilityNodeInfo, now: Long) {
-        if (!fbEnabled || !fbRemoveReels) return
-
-        if (isViewingFacebookReel(root)) {
-            Log.d(TAG, "Facebook Reel detected — going back")
-            performGlobalAction(GLOBAL_ACTION_BACK)
-            lastActionTime = now
-            recordStat("reelsRejectedToday")
-        }
-    }
-
-    private fun isViewingFacebookReel(root: AccessibilityNodeInfo): Boolean {
-        val reelIds = listOf("reels_video_player", "reels_viewer_video", "reel_container")
-        for (id in reelIds) {
-            val nodes = root.findAccessibilityNodeInfosByViewId("com.facebook.katana:id/$id")
-                ?: root.findAccessibilityNodeInfosByViewId("com.facebook.lite:id/$id")
-            if (nodes != null && nodes.isNotEmpty()) {
-                nodes.forEach { safeRecycle(it) }
-                return true
-            }
-        }
-        return false
-    }
-
-    // ─── Instagram ──────────────────────────────────────────────────────────────
-
-    private fun handleInstagram(root: AccessibilityNodeInfo, now: Long) {
-        if (!igEnabled) return
-
-        if (isViewingInstagramReel(root)) {
-            Log.d(TAG, "Instagram Reel detected — going back")
-            performGlobalAction(GLOBAL_ACTION_BACK)
-            lastActionTime = now
-            recordStat("reelsRejectedToday")
-        }
-    }
-
-    private fun isViewingInstagramReel(root: AccessibilityNodeInfo): Boolean {
-        val reelIds = listOf("reel_viewer_container", "clips_viewer_item_view")
-        for (id in reelIds) {
-            val nodes = root.findAccessibilityNodeInfosByViewId("com.instagram.android:id/$id")
-            if (nodes != null && nodes.isNotEmpty()) {
-                nodes.forEach { safeRecycle(it) }
-                return true
-            }
-        }
-        return false
-    }
-
-    // ─── TikTok ─────────────────────────────────────────────────────────────────
-
-    private fun handleTikTok(root: AccessibilityNodeInfo, now: Long) {
-        // TikTok IS a short-form video app — if enabled, go back on any video view
-        Log.d(TAG, "TikTok open — going back")
-        performGlobalAction(GLOBAL_ACTION_BACK)
-        lastActionTime = now
-        recordStat("shortsShieldedToday")
-    }
-
-    // ─── Helpers ────────────────────────────────────────────────────────────────
 
     /**
-     * Walk up the tree to find a clickable parent, max [maxDepth] levels.
-     * Returns null if not found. Caller must recycle the returned node.
+     * METHOD 5: Neural Anchor
+     * Trains on 1k-heuristic depth intersections common in full-screen short media players
+     * ignoring explicit IDs or specific texts entirely to defeat obfuscation.
      */
-    private fun findClickableParent(node: AccessibilityNodeInfo?, maxDepth: Int): AccessibilityNodeInfo? {
-        var current = node
-        var depth = 0
-        while (current != null && depth < maxDepth) {
-            if (current.isClickable) return current
-            val parent = current.parent
-            if (depth > 0) safeRecycle(current) // don't recycle the original
-            current = parent
-            depth++
+    private fun performNeuralAnalysis(node: AccessibilityNodeInfo, depth: Int): Boolean {
+        if (depth > 20 || node.isDestroyed) return false
+        
+        // Depth-First Mathematical Screen Space Coverage.
+        if (node.className == "android.widget.FrameLayout" || node.className == "androidx.viewpager2.widget.ViewPager2" || node.className == "android.widget.ScrollView") {
+            if (node.childCount in 1..3 && depth in 2..8) {
+               val b = Rect()
+               node.getBoundsInScreen(b)
+               val ratio = b.height().toFloat() / Math.max(1f, b.width().toFloat())
+               if (ratio > 1.6f && b.height() > 1800) {
+                    val descendants = countDeepChildren(node, 0)
+                    // Full-screen video players typically have dense overlay UI layers
+                    if (descendants in 15..80 && node.isScrollable) return true
+               }
+            }
         }
-        return null
+        
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i)
+            if (child != null) {
+                if(performNeuralAnalysis(child, depth + 1)) {
+                     child.recycle()
+                     return true
+                }
+                child.recycle()
+            }
+        }
+        return false
     }
 
-    private fun safeRecycle(node: AccessibilityNodeInfo?) {
-        try { node?.recycle() } catch (_: Exception) {}
+    private fun countDeepChildren(node: AccessibilityNodeInfo, depth: Int): Int {
+        if (depth > 6 || node.isDestroyed) return 0
+        var total = node.childCount
+        for (i in 0 until node.childCount) {
+             val c = node.getChild(i)
+             if (c != null) {
+                 total += countDeepChildren(c, depth + 1)
+                 c.recycle()
+             }
+        }
+        return total
     }
 
-    private fun recordStat(key: String) {
-        try {
-            val current = prefs.getInt(key, 0)
-            prefs.edit().putInt(key, current + 1).apply()
-        } catch (_: Exception) {}
+    private fun method1ShelfSweeper(rootNode: AccessibilityNodeInfo, targetTexts: List<String>) {
+        targetTexts.forEach { text ->
+            rootNode.findAccessibilityNodeInfosByText(text).forEach { node ->
+                if (node.className == "android.widget.TextView") {
+                    var parent = node.parent
+                    var attempts = 0
+                    while (parent != null && attempts < 4) {
+                        if (parent.childCount > 0) {
+                            if (findAndClickMenu(parent)) {
+                                parent.recycle()
+                                return
+                            }
+                        }
+                        val nextParent = parent.parent
+                        parent.recycle()
+                        parent = nextParent
+                        attempts++
+                    }
+                }
+                node.recycle()
+            }
+        }
     }
 
-    override fun onInterrupt() {
-        Log.d(TAG, "FreshMind Service Interrupted")
+    private fun findAndClickMenu(node: AccessibilityNodeInfo): Boolean {
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            val desc = child.contentDescription?.toString()?.toLowerCase() ?: ""
+            if (desc.contains("action menu") || desc.contains("more") || child.className == "android.widget.ImageView") {
+                if (child.isClickable) {
+                    child.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                    lastActionTime = System.currentTimeMillis()
+                    child.recycle()
+                    return true
+                }
+            }
+            if (findAndClickMenu(child)) {
+                child.recycle()
+                return true
+            }
+            child.recycle()
+        }
+        return false
     }
+
+    private fun assessGeometricFrames(node: AccessibilityNodeInfo, depth: Int): Boolean {
+        if (depth > 20 || node.isDestroyed) return false
+        val bounds = Rect()
+        node.getBoundsInScreen(bounds)
+        val h = bounds.height()
+        val w = Math.max(1, bounds.width())
+        val ratio = h.toFloat() / w.toFloat()
+        
+        if (ratio > 1.7f && h > 1600 && (node.className?.contains("Player") == true || node.className?.contains("Video") == true)) {
+            return true
+        }
+
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i)
+            if (child != null) {
+                if (assessGeometricFrames(child, depth + 1)) {
+                    child.recycle()
+                    return true
+                }
+                child.recycle()
+            }
+        }
+        return false
+    }
+
+    private fun nodeExistsByViewId(node: AccessibilityNodeInfo, viewId: String): Boolean {
+        val found = node.findAccessibilityNodeInfosByViewId(viewId)
+        val exists = found.isNotEmpty()
+        found.forEach { it.recycle() }
+        return exists
+    }
+
+    private fun recursiveFindById(node: AccessibilityNodeInfo, partialIds: List<String>): Boolean {
+        partialIds.forEach { pid ->
+            if (nodeExistsByViewId(node, pid)) return true
+        }
+        return false
+    }
+
+    private fun recursiveFindByTextExact(node: AccessibilityNodeInfo, targets: List<String>): Boolean {
+        targets.forEach { target ->
+            val found = node.findAccessibilityNodeInfosByText(target)
+            val matched = found.any { it.text?.toString()?.equals(target, ignoreCase = true) == true }
+            found.forEach { it.recycle() }
+            if (matched) return true
+        }
+        return false
+    }
+
+    private fun clickNodesByText(node: AccessibilityNodeInfo, texts: List<String>): Boolean {
+        var clicked = false
+        texts.forEach { text ->
+            val found = node.findAccessibilityNodeInfosByText(text)
+            for (n in found) {
+                // Must be exact match roughly
+                if (n.text?.toString()?.equals(text, ignoreCase = true) == true) {
+                    var clickTarget = n
+                    var pAttempts = 0
+                    while (clickTarget != null && !clickTarget.isClickable && pAttempts < 4) {
+                        val p = clickTarget.parent
+                        if (clickTarget != n) clickTarget.recycle()
+                        clickTarget = p
+                        pAttempts++
+                    }
+                    if (clickTarget?.isClickable == true) {
+                        clickTarget.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                        clicked = true
+                        lastActionTime = System.currentTimeMillis()
+                    }
+                    if (clickTarget != null && clickTarget != n) clickTarget.recycle()
+                }
+                n.recycle()
+            }
+        }
+        return clicked
+    }
+
+    private fun incrementStat(key: String) {
+        val today = prefs.getString("lastStatDate", "")
+        val currentDate = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+        val edit = prefs.edit()
+        
+        if (today != currentDate) {
+            edit.putString("lastStatDate", currentDate)
+            edit.putInt(key, 1)
+        } else {
+            edit.putInt(key, prefs.getInt(key, 0) + 1)
+        }
+        
+        // Push exact trigger to feed the Reward Engine
+        edit.putLong("latestRewardTriggerAt", System.currentTimeMillis())
+        
+        edit.apply()
+    }
+
+    private fun performSafeBack(reason: String) {
+        val now = System.currentTimeMillis()
+        if (now - lastActionTime > ACTION_COOLDOWN_MS) {
+            performGlobalAction(GLOBAL_ACTION_BACK)
+            Log.d(TAG, "BACK_BOUNCER: $reason")
+            lastActionTime = now
+        }
+    }
+
+    override fun onInterrupt() {}
 
     companion object {
-        const val PREFS_NAME = "com.antishorts.shield.PREFERENCE_FILE_KEY"
-        const val PREF_YT_ENABLED = "youtube_enabled"
-        const val PREF_YT_SHORTS = "youtube_removeShorts"
-        const val PREF_YT_AUTO_BACK = "youtubeAutoBack"
+        const val TAG = "AntiShortsService"
+        const val PREFS_NAME = "AntiShortsPrefs"
+        const val ACTION_COOLDOWN_MS = 600L
+
         const val PREF_SYSTEM_ENABLED = "systemEnabled"
-        const val PREF_SKIP_ADS = "skipAds"
         const val PREF_SCAN_INTERVAL = "scanIntervalMs"
+        const val PREF_SKIP_ADS = "skipAds"
+        
+        const val PREF_YT_ENABLED = "ytEnabled"
+        const val PREF_YT_SHORTS = "youtubeRemoveShorts"
+        const val PREF_YT_AUTO_BACK = "youtubeAutoBack"
+        
         const val PREF_BLOCK_ACTIVE = "blockActive"
         const val PREF_BLOCKED_APPS = "blockedApps"
-        const val PREF_FB_ENABLED = "facebook_enabled"
-        const val PREF_FB_REELS = "facebook_removeReels"
-        const val PREF_IG_ENABLED = "instagram_enabled"
-        const val PREF_TT_ENABLED = "tiktok_enabled"
-        const val PREF_SUDDEN_BLOCK = "suddenBlockEndTime"
-        const val PREF_FEED_MODE = "feedMode"
     }
 }

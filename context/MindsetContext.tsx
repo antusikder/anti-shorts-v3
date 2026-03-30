@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Notifications from "expo-notifications";
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -72,6 +73,7 @@ interface MindsetContextType {
   toggleTask: (id: string) => void;
   completeFocusSession: () => void;
   setPin: (pin: string | null) => void;
+  scheduleBedtimeNotification: (hour: number, min: number, remindBefore: number) => void;
   isLoaded: boolean;
 }
 
@@ -217,6 +219,29 @@ export function MindsetProvider({ children }: { children: React.ReactNode }) {
     [update]
   );
 
+  const scheduleBedtimeNotification = useCallback(
+    async (hour: number, min: number, remindBefore: number) => {
+      try {
+        await Notifications.cancelAllScheduledNotificationsAsync();
+        const totalMin = hour * 60 + min - remindBefore;
+        const remindHour = Math.floor(((totalMin % (24 * 60)) + 24 * 60) % (24 * 60) / 60);
+        const remindMin = ((totalMin % (24 * 60)) + 24 * 60) % (24 * 60) % 60;
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: "Bedtime in " + remindBefore + " minutes",
+            body: "Start winding down. Put the phone down soon.",
+          },
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.DAILY,
+            hour: remindHour,
+            minute: remindMin,
+          },
+        });
+      } catch {}
+    },
+    []
+  );
+
   return (
     <MindsetContext.Provider
       value={{
@@ -229,6 +254,7 @@ export function MindsetProvider({ children }: { children: React.ReactNode }) {
         toggleTask,
         completeFocusSession,
         setPin,
+        scheduleBedtimeNotification,
         isLoaded,
       }}
     >

@@ -1,517 +1,779 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  View, ScrollView, Text, TouchableOpacity, StyleSheet, Switch,
-  TextInput, Alert, Modal, Vibration,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  TextInput, Modal, Dimensions, Alert, Vibration,
+  AppState, AppStateStatus, Switch,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { useMindset, PlannerTask, BedtimeConfig, ScreenTimeConfig } from "@/context/MindsetContext";
-import { C } from "@/constants/colors";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Notifications from "expo-notifications";
+import * as Haptics from "expo-haptics";
+import { useMindset } from "@/context/MindsetContext";
+import { C, R } from "@/constants/colors";
 
-const CARD_RADIUS = 20;
-const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
+const { width: SW } = Dimensions.get("window");
+const SCREEN_TIME_KEY = "@freshmind:screen_time_v2";
 
-function Section({ title, icon, color = C.amber, children }: {
-  title: string; icon: string; color?: string; children: React.ReactNode;
-}) {
-  const [expanded, setExpanded] = useState(true);
+// ════════════════════════════════════════════════════════════════════════════
+// SECTION 1: SCREEN TIME BLOCKER (Real enforcement)
+// ════════════════════════════════════════════════════════════════════════════
+
+interface ScreenTimeData {
+  date: string;
+  usedSeconds: number;
+  limitMinutes: number;
+  enabled: boolean;
+  lastActiveTimestamp: number;
+}
+
+const BlockingOverlay = memo(({ remainingSec, onBypass }: { remainingSec: number; onBypass?: () => void }) => {
+  const mins = Math.floor(remainingSec / 60);
+  const secs = remainingSec % 60;
+
   return (
-    <View style={styles.section}>
-      <TouchableOpacity style={styles.sectionHeader} onPress={() => setExpanded(!expanded)} activeOpacity={0.7}>
-        <View style={[styles.sectionIcon, { backgroundColor: color + "22" }]}>
-          <MaterialCommunityIcons name={icon as any} size={18} color={color} />
+    <Modal visible animationType="fade" statusBarTranslucent transparent={false}>
+      <View style={bo.container}>
+        <View style={bo.iconWrap}>
+          <MaterialCommunityIcons name="shield-lock" size={64} color={C.amber} />
         </View>
-        <Text style={styles.sectionTitle}>{title}</Text>
-        <MaterialCommunityIcons name={expanded ? "chevron-up" : "chevron-down"} size={20} color={C.textMuted} />
-      </TouchableOpacity>
-      {expanded && <View style={styles.sectionBody}>{children}</View>}
-    </View>
-  );
-}
+        <Text style={bo.title}>Screen Time Limit Reached</Text>
+        <Text style={bo.subtitle}>
+          You've used your allocated screen time for today.{"\n"}
+          Take a break. Go outside. Move your body.
+        </Text>
 
-function Row({ label, sub, right }: { label: string; sub?: string; right: React.ReactNode }) {
-  return (
-    <View style={styles.row}>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.rowLabel}>{label}</Text>
-        {sub && <Text style={styles.rowSub}>{sub}</Text>}
+        <View style={bo.timerCard}>
+          <Text style={bo.timerLabel}>Cooldown remaining</Text>
+          <Text style={bo.timer}>
+            {mins.toString().padStart(2, "0")}:{secs.toString().padStart(2, "0")}
+          </Text>
+        </View>
+
+        <View style={bo.tipsSection}>
+          <Text style={bo.tipsTitle}>While you wait:</Text>
+          {[
+            { icon: "walk", text: "Take a 10-minute walk" },
+            { icon: "water", text: "Drink a glass of water" },
+            { icon: "meditation", text: "Practice deep breathing" },
+            { icon: "book-open-variant", text: "Read a physical book" },
+          ].map((tip, i) => (
+            <View key={i} style={bo.tipRow}>
+              <MaterialCommunityIcons name={tip.icon as any} size={18} color={C.textMuted} />
+              <Text style={bo.tipText}>{tip.text}</Text>
+            </View>
+          ))}
+        </View>
+
+        <Text style={bo.lockNote}>
+          This screen cannot be dismissed until the cooldown ends.
+        </Text>
       </View>
-      {right}
+    </Modal>
+  );
+});
+
+const bo = StyleSheet.create({
+  container: {
+    flex: 1, backgroundColor: C.bg,
+    alignItems: "center", justifyContent: "center",
+    paddingHorizontal: 32,
+  },
+  iconWrap: {
+    width: 120, height: 120, borderRadius: 60,
+    backgroundColor: C.amberBg, borderWidth: 2, borderColor: C.amberBorder,
+    alignItems: "center", justifyContent: "center", marginBottom: 24,
+  },
+  title: { fontFamily: "Inter_700Bold", fontSize: 24, color: C.text, textAlign: "center", marginBottom: 8, letterSpacing: -0.5 },
+  subtitle: { fontFamily: "Inter_400Regular", fontSize: 14, color: C.textSub, textAlign: "center", lineHeight: 22, marginBottom: 32 },
+  timerCard: {
+    backgroundColor: C.bgCard, borderWidth: 1, borderColor: C.amberBorder,
+    borderRadius: R.card, padding: 24, alignItems: "center", width: "100%", marginBottom: 32,
+  },
+  timerLabel: { fontFamily: "Inter_500Medium", fontSize: 12, color: C.textMuted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 },
+  timer: { fontFamily: "Inter_700Bold", fontSize: 56, color: C.amber, letterSpacing: -2 },
+  tipsSection: { width: "100%", marginBottom: 32 },
+  tipsTitle: { fontFamily: "Inter_600SemiBold", fontSize: 13, color: C.textMuted, marginBottom: 12 },
+  tipRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 10 },
+  tipText: { fontFamily: "Inter_400Regular", fontSize: 14, color: C.textSub },
+  lockNote: { fontFamily: "Inter_400Regular", fontSize: 11, color: C.textMuted, textAlign: "center", opacity: 0.6 },
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// SECTION 2: SCREEN TIME TRACKER
+// ════════════════════════════════════════════════════════════════════════════
+
+const ScreenTimeSection = memo(() => {
+  const { mindset, updateScreenTime } = useMindset();
+  const st = mindset.screenTime;
+
+  const [usedSeconds, setUsedSeconds] = useState(0);
+  const [showBlocker, setShowBlocker] = useState(false);
+  const [cooldownSec, setCooldownSec] = useState(0);
+  const activeStartRef = useRef<number>(Date.now());
+  const intervalRef = useRef<any>(null);
+
+  // Load persisted screen time data
+  useEffect(() => {
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem(SCREEN_TIME_KEY);
+        if (raw) {
+          const data: ScreenTimeData = JSON.parse(raw);
+          const today = new Date().toDateString();
+          if (data.date === today) {
+            setUsedSeconds(data.usedSeconds);
+          } else {
+            // New day — reset
+            await AsyncStorage.setItem(SCREEN_TIME_KEY, JSON.stringify({
+              date: today, usedSeconds: 0, limitMinutes: st.dailyLimitMin,
+              enabled: st.enabled, lastActiveTimestamp: Date.now(),
+            }));
+          }
+        }
+      } catch {}
+    })();
+  }, []);
+
+  // Track foreground time with AppState
+  useEffect(() => {
+    if (!st.enabled) return;
+
+    activeStartRef.current = Date.now();
+
+    // Tick every second while active
+    intervalRef.current = setInterval(() => {
+      setUsedSeconds(prev => {
+        const next = prev + 1;
+        // Save every 10 seconds
+        if (next % 10 === 0) {
+          AsyncStorage.setItem(SCREEN_TIME_KEY, JSON.stringify({
+            date: new Date().toDateString(),
+            usedSeconds: next,
+            limitMinutes: st.dailyLimitMin,
+            enabled: st.enabled,
+            lastActiveTimestamp: Date.now(),
+          })).catch(() => {});
+        }
+
+        // Check limits
+        const limitSec = st.dailyLimitMin * 60;
+        const warningSec = Math.floor(limitSec * (st.warningAtPercent / 100));
+
+        if (next === warningSec) {
+          // Fire 80% warning notification
+          Notifications.scheduleNotificationAsync({
+            content: {
+              title: "Screen Time Warning",
+              body: `You've used ${st.warningAtPercent}% of your daily screen time (${st.dailyLimitMin} min limit).`,
+            },
+            trigger: null,
+          }).catch(() => {});
+        }
+
+        if (next >= limitSec && !showBlocker) {
+          // LIMIT REACHED — show blocking overlay
+          setShowBlocker(true);
+          setCooldownSec(st.cooldownMin * 60);
+          Vibration.vibrate([0, 200, 100, 200, 100, 200]);
+          Notifications.scheduleNotificationAsync({
+            content: {
+              title: "Screen Time Limit Reached",
+              body: `Your ${st.dailyLimitMin}-minute daily limit is up. Take a break!`,
+            },
+            trigger: null,
+          }).catch(() => {});
+        }
+
+        return next;
+      });
+    }, 1000);
+
+    const sub = AppState.addEventListener("change", (state: AppStateStatus) => {
+      if (state === "active") {
+        activeStartRef.current = Date.now();
+      } else if (state === "background" || state === "inactive") {
+        // Pause tracking
+      }
+    });
+
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      sub.remove();
+    };
+  }, [st.enabled, st.dailyLimitMin]);
+
+  // Cooldown countdown for blocker
+  useEffect(() => {
+    if (!showBlocker || cooldownSec <= 0) return;
+    const timer = setInterval(() => {
+      setCooldownSec(prev => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          setShowBlocker(false);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [showBlocker]);
+
+  const usedMin = Math.floor(usedSeconds / 60);
+  const limitMin = st.dailyLimitMin;
+  const pct = Math.min(100, Math.round((usedSeconds / (limitMin * 60)) * 100));
+  const progressWidth = `${Math.min(100, pct)}%` as any;
+
+  const handleToggle = (val: boolean) => {
+    updateScreenTime({ ...st, enabled: val });
+  };
+
+  const handleLimitChange = (text: string) => {
+    const mins = parseInt(text) || 1;
+    const clamped = Math.max(1, Math.min(480, mins));
+    updateScreenTime({ ...st, dailyLimitMin: clamped });
+  };
+
+  return (
+    <View style={ss.card}>
+      {showBlocker && <BlockingOverlay remainingSec={cooldownSec} />}
+
+      <View style={ss.header}>
+        <MaterialCommunityIcons name="timer-sand" size={20} color={C.amber} />
+        <Text style={ss.title}>Screen Time</Text>
+        <Switch
+          value={st.enabled}
+          onValueChange={handleToggle}
+          trackColor={{ false: "rgba(255,255,255,0.08)", true: C.amberBg }}
+          thumbColor={st.enabled ? C.amber : C.textMuted}
+        />
+      </View>
+
+      {st.enabled && (
+        <>
+          {/* Progress */}
+          <View style={ss.progressSection}>
+            <View style={ss.progressRow}>
+              <Text style={ss.usedText}>{usedMin} min</Text>
+              <Text style={ss.limitText}>/ {limitMin} min</Text>
+            </View>
+            <View style={ss.progressBar}>
+              <View style={[ss.progressFill, {
+                width: progressWidth,
+                backgroundColor: pct >= 100 ? C.danger : pct >= 80 ? C.amber : C.success
+              }]} />
+            </View>
+            <Text style={[ss.pctText, { color: pct >= 100 ? C.danger : pct >= 80 ? C.amber : C.textMuted }]}>
+              {pct}% used
+            </Text>
+          </View>
+
+          {/* Limit input */}
+          <View style={ss.inputRow}>
+            <Text style={ss.inputLabel}>Daily Limit (minutes)</Text>
+            <TextInput
+              style={ss.input}
+              value={st.dailyLimitMin.toString()}
+              onChangeText={handleLimitChange}
+              keyboardType="number-pad"
+              selectTextOnFocus
+            />
+          </View>
+
+          {/* Quick presets */}
+          <View style={ss.presetsRow}>
+            {[1, 5, 15, 30, 60, 120].map(m => (
+              <TouchableOpacity
+                key={m}
+                style={[ss.preset, st.dailyLimitMin === m && ss.presetActive]}
+                onPress={() => updateScreenTime({ ...st, dailyLimitMin: m })}
+                activeOpacity={0.8}
+              >
+                <Text style={[ss.presetText, st.dailyLimitMin === m && { color: C.amber }]}>
+                  {m < 60 ? `${m}m` : `${m / 60}h`}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Cooldown */}
+          <View style={ss.inputRow}>
+            <Text style={ss.inputLabel}>Cooldown (minutes after limit)</Text>
+            <TextInput
+              style={ss.input}
+              value={st.cooldownMin.toString()}
+              onChangeText={(v) => {
+                const n = parseInt(v) || 5;
+                updateScreenTime({ ...st, cooldownMin: Math.max(1, Math.min(60, n)) });
+              }}
+              keyboardType="number-pad"
+              selectTextOnFocus
+            />
+          </View>
+        </>
+      )}
     </View>
   );
-}
+});
 
-// ─── Pomodoro Timer ──────────────────────────────────────────────────────────
-function PomodoroTimer() {
-  const { mindset, updateFocusSession, completeFocusSession } = useMindset();
-  const cfg = mindset.focusSession;
-  const [phase, setPhase] = useState<"work" | "break" | "long_break">("work");
-  const [running, setRunning] = useState(false);
-  const [secondsLeft, setSecondsLeft] = useState(cfg.workMin * 60);
-  const [sessionsDone, setSessionsDone] = useState(0);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+const ss = StyleSheet.create({
+  card: { backgroundColor: C.bgCard, borderWidth: 1, borderColor: C.border, borderRadius: R.card, padding: 16, marginBottom: 16 },
+  header: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 },
+  title: { fontFamily: "Inter_600SemiBold", fontSize: 16, color: C.text, flex: 1 },
+  progressSection: { marginBottom: 16 },
+  progressRow: { flexDirection: "row", alignItems: "baseline", gap: 4, marginBottom: 8 },
+  usedText: { fontFamily: "Inter_700Bold", fontSize: 32, color: C.text, letterSpacing: -1 },
+  limitText: { fontFamily: "Inter_400Regular", fontSize: 16, color: C.textMuted },
+  progressBar: { height: 8, backgroundColor: C.bgElevated, borderRadius: 4, overflow: "hidden", marginBottom: 6 },
+  progressFill: { height: 8, borderRadius: 4 },
+  pctText: { fontFamily: "Inter_500Medium", fontSize: 12 },
+  inputRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
+  inputLabel: { fontFamily: "Inter_500Medium", fontSize: 13, color: C.textSub, flex: 1, marginRight: 12 },
+  input: {
+    backgroundColor: C.bgElevated, borderWidth: 1, borderColor: C.border,
+    borderRadius: R.button, paddingVertical: 8, paddingHorizontal: 14,
+    fontFamily: "Inter_600SemiBold", fontSize: 18, color: C.text, textAlign: "center",
+    minWidth: 70,
+  },
+  presetsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 },
+  preset: {
+    paddingVertical: 8, paddingHorizontal: 14, borderRadius: R.circle,
+    backgroundColor: C.bgElevated, borderWidth: 1, borderColor: C.border,
+  },
+  presetActive: { backgroundColor: C.amberBg, borderColor: C.amberBorder },
+  presetText: { fontFamily: "Inter_600SemiBold", fontSize: 13, color: C.textMuted },
+});
 
-  const phaseTotal = phase === "work" ? cfg.workMin * 60 : phase === "break" ? cfg.breakMin * 60 : cfg.longBreakMin * 60;
-  const progress = 1 - secondsLeft / phaseTotal;
-  const mins = Math.floor(secondsLeft / 60).toString().padStart(2, "0");
-  const secs = (secondsLeft % 60).toString().padStart(2, "0");
+// ════════════════════════════════════════════════════════════════════════════
+// SECTION 3: POMODORO TIMER
+// ════════════════════════════════════════════════════════════════════════════
+
+const PomodoroSection = memo(() => {
+  const { mindset, completeFocusSession } = useMindset();
+  const fs = mindset.focusSession;
+
+  const [phase, setPhase] = useState<"idle" | "work" | "break">("idle");
+  const [timeLeft, setTimeLeft] = useState(fs.workMin * 60);
+  const [sessionsCompleted, setSessionsCompleted] = useState(0);
 
   useEffect(() => {
-    setSecondsLeft(cfg.workMin * 60);
-    setPhase("work");
-    setRunning(false);
-  }, [cfg]);
-
-  useEffect(() => {
-    if (running) {
-      intervalRef.current = setInterval(() => {
-        setSecondsLeft((s) => {
-          if (s <= 1) {
-            Vibration.vibrate([0, 300, 100, 300]);
-            advancePhase();
-            return 0;
+    if (phase === "idle") return;
+    const interval = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          Vibration.vibrate([0, 200, 100, 200]);
+          if (phase === "work") {
+            const newSessions = sessionsCompleted + 1;
+            setSessionsCompleted(newSessions);
+            completeFocusSession();
+            const isLongBreak = newSessions % fs.sessionsBeforeLongBreak === 0;
+            setPhase("break");
+            return (isLongBreak ? fs.longBreakMin : fs.breakMin) * 60;
+          } else {
+            setPhase("idle");
+            return fs.workMin * 60;
           }
-          return s - 1;
-        });
-      }, 1000);
-    } else {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    }
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [running, phase]);
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [phase]);
 
-  const advancePhase = () => {
-    if (phase === "work") {
-      const newCount = sessionsDone + 1;
-      setSessionsDone(newCount);
-      completeFocusSession();
-      if (newCount % cfg.sessionsBeforeLongBreak === 0) {
-        setPhase("long_break");
-        setSecondsLeft(cfg.longBreakMin * 60);
-      } else {
-        setPhase("break");
-        setSecondsLeft(cfg.breakMin * 60);
-      }
+  const toggleTimer = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (phase === "idle") {
+      setPhase("work");
+      setTimeLeft(fs.workMin * 60);
+    } else if (phase === "work") {
+      setPhase("idle");
+      setTimeLeft(fs.workMin * 60);
     } else {
       setPhase("work");
-      setSecondsLeft(cfg.workMin * 60);
+      setTimeLeft(fs.workMin * 60);
     }
-    setRunning(false);
   };
 
-  const reset = () => {
-    setRunning(false);
-    setPhase("work");
-    setSecondsLeft(cfg.workMin * 60);
-    setSessionsDone(0);
-  };
-
-  const phaseColor = phase === "work" ? C.amber : phase === "break" ? C.green : C.blue;
-  const phaseLabel = phase === "work" ? "Focus" : phase === "break" ? "Break" : "Long Break";
-  const circumference = 2 * Math.PI * 60;
-  const strokeDash = circumference * (1 - progress);
+  const mins = Math.floor(timeLeft / 60);
+  const secs = timeLeft % 60;
+  const totalSec = phase === "work" ? fs.workMin * 60 : fs.breakMin * 60;
+  const progress = phase !== "idle" ? ((totalSec - timeLeft) / totalSec) : 0;
+  const ringColor = phase === "work" ? C.amber : phase === "break" ? C.success : C.textMuted;
 
   return (
-    <View style={styles.pomodoro}>
-      <View style={styles.pomodoroTimer}>
-        {/* Simple progress ring using View borders */}
-        <View style={[styles.pomodoroRing, { borderColor: phaseColor + "33" }]}>
-          <View style={[styles.pomodoroFill, { borderColor: phaseColor, borderRightColor: "transparent", borderTopColor: progress > 0.75 ? phaseColor : "transparent", transform: [{ rotate: `${progress * 360}deg` }] }]} />
-          <View style={styles.pomodoroCenter}>
-            <Text style={[styles.pomodoroTime, { color: phaseColor }]}>{mins}:{secs}</Text>
-            <Text style={[styles.pomodoroPhase, { color: phaseColor + "99" }]}>{phaseLabel}</Text>
-          </View>
+    <View style={ps.card}>
+      <View style={ps.header}>
+        <MaterialCommunityIcons name="timer" size={20} color={C.amber} />
+        <Text style={ps.title}>Deep Work Timer</Text>
+        <Text style={ps.sessionCount}>{sessionsCompleted} sessions</Text>
+      </View>
+
+      {/* Timer circle */}
+      <View style={ps.timerWrap}>
+        <View style={[ps.timerCircle, { borderColor: ringColor }]}>
+          {/* Progress ring approximation */}
+          <View style={[ps.progressRing, {
+            borderColor: ringColor,
+            borderTopColor: progress > 0.25 ? ringColor : "transparent",
+            borderRightColor: progress > 0.5 ? ringColor : "transparent",
+            borderBottomColor: progress > 0.75 ? ringColor : "transparent",
+            borderLeftColor: progress > 0 ? ringColor : "transparent",
+            transform: [{ rotate: `${progress * 360}deg` }],
+          }]} />
+          <Text style={ps.timerText}>
+            {mins.toString().padStart(2, "0")}:{secs.toString().padStart(2, "0")}
+          </Text>
+          <Text style={[ps.phaseText, { color: ringColor }]}>
+            {phase === "work" ? "DEEP WORK" : phase === "break" ? "RECOVERY" : "READY"}
+          </Text>
         </View>
       </View>
-      <Text style={styles.pomodoroSessions}>Sessions today: {sessionsDone} · Total: {mindset.totalFocusSessionsCompleted}</Text>
-      <View style={styles.pomodoroControls}>
-        <TouchableOpacity onPress={reset} style={styles.pomodoroBtn}>
-          <MaterialCommunityIcons name="restart" size={20} color={C.textMuted} />
+
+      {/* Controls */}
+      <View style={ps.controls}>
+        <TouchableOpacity
+          style={ps.resetBtn}
+          onPress={() => { setPhase("idle"); setTimeLeft(fs.workMin * 60); setSessionsCompleted(0); }}
+          activeOpacity={0.7}
+        >
+          <MaterialCommunityIcons name="refresh" size={20} color={C.textMuted} />
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => setRunning(!running)} style={[styles.pomodoroPlayBtn, { backgroundColor: phaseColor + "22", borderColor: phaseColor }]}>
-          <MaterialCommunityIcons name={running ? "pause" : "play"} size={28} color={phaseColor} />
+
+        <TouchableOpacity
+          style={[ps.playBtn, { borderColor: phase === "work" ? C.danger : C.amber }]}
+          onPress={toggleTimer}
+          activeOpacity={0.85}
+        >
+          <MaterialCommunityIcons
+            name={phase === "work" ? "stop" : "play"}
+            size={28}
+            color={phase === "work" ? C.danger : C.amber}
+          />
         </TouchableOpacity>
-        <TouchableOpacity onPress={advancePhase} style={styles.pomodoroBtn}>
-          <MaterialCommunityIcons name="skip-next" size={20} color={C.textMuted} />
+
+        <TouchableOpacity
+          style={ps.resetBtn}
+          onPress={() => {
+            setPhase("break");
+            setTimeLeft(fs.breakMin * 60);
+          }}
+          activeOpacity={0.7}
+        >
+          <MaterialCommunityIcons name="coffee-outline" size={20} color={C.success} />
         </TouchableOpacity>
       </View>
     </View>
   );
-}
+});
 
-// ─── Daily Planner ────────────────────────────────────────────────────────────
-function DailyPlanner() {
+const ps = StyleSheet.create({
+  card: { backgroundColor: C.bgCard, borderWidth: 1, borderColor: C.border, borderRadius: R.card, padding: 16, marginBottom: 16 },
+  header: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 16 },
+  title: { fontFamily: "Inter_600SemiBold", fontSize: 16, color: C.text, flex: 1 },
+  sessionCount: { fontFamily: "Inter_500Medium", fontSize: 12, color: C.amber },
+  timerWrap: { alignItems: "center", marginBottom: 20 },
+  timerCircle: {
+    width: 200, height: 200, borderRadius: 100,
+    borderWidth: 4, alignItems: "center", justifyContent: "center",
+    backgroundColor: C.bgElevated,
+  },
+  progressRing: {
+    position: "absolute", width: 200, height: 200, borderRadius: 100,
+    borderWidth: 4,
+  },
+  timerText: { fontFamily: "Inter_700Bold", fontSize: 44, color: C.text, letterSpacing: -2 },
+  phaseText: { fontFamily: "Inter_700Bold", fontSize: 11, letterSpacing: 3, marginTop: 4 },
+  controls: { flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 24 },
+  resetBtn: {
+    width: 48, height: 48, borderRadius: 24,
+    backgroundColor: C.bgElevated, borderWidth: 1, borderColor: C.border,
+    alignItems: "center", justifyContent: "center",
+  },
+  playBtn: {
+    width: 64, height: 64, borderRadius: 32,
+    backgroundColor: C.bgElevated, borderWidth: 2,
+    alignItems: "center", justifyContent: "center",
+  },
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// SECTION 4: BEDTIME REMINDER
+// ════════════════════════════════════════════════════════════════════════════
+
+const TimeAdjuster = memo(({ label, hour, min, hourField, minField, adjustTime }: {
+  label: string; hour: number; min: number;
+  hourField: "bedHour" | "wakeHour"; minField: "bedMin" | "wakeMin";
+  adjustTime: (field: "bedHour" | "bedMin" | "wakeHour" | "wakeMin", delta: number) => void;
+}) => (
+  <View style={bts.timeBlock}>
+    <Text style={bts.timeLabel}>{label}</Text>
+    <View style={bts.timeRow}>
+      <TouchableOpacity onPress={() => adjustTime(hourField, -1)} style={bts.adjBtn}><Text style={bts.adjText}>−</Text></TouchableOpacity>
+      <Text style={bts.timeValue}>{hour.toString().padStart(2, "0")}:{min.toString().padStart(2, "0")}</Text>
+      <TouchableOpacity onPress={() => adjustTime(hourField, 1)} style={bts.adjBtn}><Text style={bts.adjText}>+</Text></TouchableOpacity>
+    </View>
+    <View style={bts.minRow}>
+      <TouchableOpacity onPress={() => adjustTime(minField, -5)} style={bts.adjBtnSm}><Text style={bts.adjTextSm}>−5m</Text></TouchableOpacity>
+      <TouchableOpacity onPress={() => adjustTime(minField, 5)} style={bts.adjBtnSm}><Text style={bts.adjTextSm}>+5m</Text></TouchableOpacity>
+    </View>
+  </View>
+));
+
+const BedtimeSection = memo(() => {
+  const { mindset, updateBedtime, scheduleBedtimeNotification } = useMindset();
+  const bt = mindset.bedtime;
+
+  const handleToggle = useCallback((val: boolean) => {
+    updateBedtime({ ...bt, enabled: val });
+    if (val) {
+      scheduleBedtimeNotification(bt.bedHour, bt.bedMin, bt.reminderMinsBefore);
+    }
+  }, [bt, updateBedtime, scheduleBedtimeNotification]);
+
+  const adjustTime = useCallback((field: "bedHour" | "bedMin" | "wakeHour" | "wakeMin", delta: number) => {
+    const current = bt[field];
+    const isHour = field.includes("Hour");
+    const max = isHour ? 23 : 59;
+    const next = ((current + delta) % (max + 1) + (max + 1)) % (max + 1);
+    const updated = { ...bt, [field]: next };
+    updateBedtime(updated);
+    if (bt.enabled) {
+      scheduleBedtimeNotification(updated.bedHour, updated.bedMin, updated.reminderMinsBefore);
+    }
+  }, [bt, updateBedtime, scheduleBedtimeNotification]);
+
+  return (
+    <View style={bts.card}>
+      <View style={bts.header}>
+        <MaterialCommunityIcons name="weather-night" size={20} color={C.amber} />
+        <Text style={bts.title}>Bedtime</Text>
+        <Switch
+          value={bt.enabled}
+          onValueChange={handleToggle}
+          trackColor={{ false: "rgba(255,255,255,0.08)", true: C.amberBg }}
+          thumbColor={bt.enabled ? C.amber : C.textMuted}
+        />
+      </View>
+
+      {bt.enabled && (
+        <View style={bts.timesRow}>
+          <TimeAdjuster label="Sleep" hour={bt.bedHour} min={bt.bedMin} hourField="bedHour" minField="bedMin" adjustTime={adjustTime} />
+          <View style={bts.divider} />
+          <TimeAdjuster label="Wake" hour={bt.wakeHour} min={bt.wakeMin} hourField="wakeHour" minField="wakeMin" adjustTime={adjustTime} />
+        </View>
+      )}
+    </View>
+  );
+});
+
+const bts = StyleSheet.create({
+  card: { backgroundColor: C.bgCard, borderWidth: 1, borderColor: C.border, borderRadius: R.card, padding: 16, marginBottom: 16 },
+  header: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 },
+  title: { fontFamily: "Inter_600SemiBold", fontSize: 16, color: C.text, flex: 1 },
+  timesRow: { flexDirection: "row", alignItems: "center" },
+  divider: { width: 1, height: 60, backgroundColor: C.border, marginHorizontal: 16 },
+  timeBlock: { flex: 1, alignItems: "center" },
+  timeLabel: { fontFamily: "Inter_500Medium", fontSize: 12, color: C.textMuted, marginBottom: 8 },
+  timeRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  timeValue: { fontFamily: "Inter_700Bold", fontSize: 28, color: C.text, letterSpacing: -1, minWidth: 80, textAlign: "center" },
+  adjBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: C.bgElevated, borderWidth: 1, borderColor: C.border,
+    alignItems: "center", justifyContent: "center",
+  },
+  adjText: { fontFamily: "Inter_700Bold", fontSize: 18, color: C.amber },
+  minRow: { flexDirection: "row", gap: 8, marginTop: 8 },
+  adjBtnSm: { paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6, backgroundColor: C.bgElevated },
+  adjTextSm: { fontFamily: "Inter_500Medium", fontSize: 10, color: C.textMuted },
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// SECTION 5: DAILY PLANNER
+// ════════════════════════════════════════════════════════════════════════════
+
+const PlannerSection = memo(() => {
   const { mindset, setTodayTasks, toggleTask } = useMindset();
-  const [showAdd, setShowAdd] = useState(false);
-  const [newLabel, setNewLabel] = useState("");
-  const [newCategory, setNewCategory] = useState<PlannerTask["category"]>("morning");
-  const [newPriority, setNewPriority] = useState<PlannerTask["priority"]>("medium");
-
   const tasks = mindset.todayTasks;
-  const donePct = tasks.length > 0 ? Math.round((tasks.filter((t) => t.done).length / tasks.length) * 100) : 0;
+  const [newTask, setNewTask] = useState("");
+  const [newPriority, setNewPriority] = useState<"low" | "medium" | "high">("medium");
+
+  const sortedTasks = useMemo(() => {
+    const order = { high: 0, medium: 1, low: 2 };
+    return [...tasks].sort((a, b) => {
+      if (a.done !== b.done) return a.done ? 1 : -1;
+      return order[a.priority] - order[b.priority];
+    });
+  }, [tasks]);
 
   const addTask = () => {
-    if (!newLabel.trim()) return;
-    const task: PlannerTask = {
+    const label = newTask.trim();
+    if (!label) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const task = {
       id: Date.now().toString(),
-      label: newLabel.trim(),
-      category: newCategory,
+      label,
+      category: "anytime" as const,
       done: false,
       priority: newPriority,
     };
     setTodayTasks([...tasks, task]);
-    setNewLabel("");
-    setShowAdd(false);
+    setNewTask("");
   };
 
   const removeTask = (id: string) => {
-    setTodayTasks(tasks.filter((t) => t.id !== id));
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setTodayTasks(tasks.filter(t => t.id !== id));
   };
 
-  const categoryColors: Record<PlannerTask["category"], string> = {
-    morning: C.amber, afternoon: C.blue, evening: C.purple, anytime: C.green,
-  };
-
-  const priorityColors: Record<PlannerTask["priority"], string> = {
-    low: C.green, medium: C.amber, high: C.danger,
-  };
+  const completedCount = tasks.filter(t => t.done).length;
+  const totalCount = tasks.length;
+  const progressPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
   return (
-    <View>
-      {tasks.length > 0 && (
-        <View style={styles.progressBar}>
-          <View style={[styles.progressFill, { width: `${donePct}%` as any, backgroundColor: C.green }]} />
-          <Text style={styles.progressText}>{donePct}% complete</Text>
+    <View style={pls.card}>
+      <View style={pls.header}>
+        <MaterialCommunityIcons name="format-list-checks" size={20} color={C.amber} />
+        <Text style={pls.title}>Daily Planner</Text>
+        <Text style={pls.progress}>{completedCount}/{totalCount}</Text>
+      </View>
+
+      {totalCount > 0 && (
+        <View style={pls.progressBar}>
+          <View style={[pls.progressFill, { width: `${progressPct}%` as any }]} />
         </View>
       )}
 
-      {tasks.map((task) => (
-        <TouchableOpacity
-          key={task.id}
-          onPress={() => toggleTask(task.id)}
-          onLongPress={() => { Vibration.vibrate(50); removeTask(task.id); }}
-          style={[styles.taskRow, task.done && styles.taskDone]}
-          activeOpacity={0.7}
-        >
-          <View style={[styles.taskCheck, { borderColor: categoryColors[task.category] }]}>
-            {task.done && <MaterialCommunityIcons name="check" size={12} color={categoryColors[task.category]} />}
-          </View>
-          <Text style={[styles.taskLabel, task.done && styles.taskLabelDone]}>{task.label}</Text>
-          <View style={[styles.priorityDot, { backgroundColor: priorityColors[task.priority] }]} />
+      {/* Add task */}
+      <View style={pls.addRow}>
+        <TextInput
+          style={pls.addInput}
+          value={newTask}
+          onChangeText={setNewTask}
+          placeholder="Add a task…"
+          placeholderTextColor={C.textMuted}
+          onSubmitEditing={addTask}
+          returnKeyType="done"
+        />
+        <TouchableOpacity onPress={addTask} style={pls.addBtn} activeOpacity={0.8}>
+          <MaterialCommunityIcons name="plus" size={20} color={C.bg} />
         </TouchableOpacity>
+      </View>
+
+      {/* Priority selector */}
+      <View style={pls.priRow}>
+        {(["low", "medium", "high"] as const).map(p => (
+          <TouchableOpacity
+            key={p}
+            onPress={() => setNewPriority(p)}
+            style={[pls.priChip, newPriority === p && pls.priChipActive]}
+            activeOpacity={0.8}
+          >
+            <Text style={[pls.priText, newPriority === p && { color: C.amber }]}>
+              {p === "high" ? "High" : p === "medium" ? "Mid" : "Low"}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Task list */}
+      {sortedTasks.map(task => (
+        <View key={task.id} style={[pls.taskRow, task.done && { opacity: 0.5 }]}>
+          <TouchableOpacity
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); toggleTask(task.id); }}
+            style={[pls.checkbox, task.done && pls.checkboxDone]}
+          >
+            {task.done && <MaterialCommunityIcons name="check" size={14} color={C.success} />}
+          </TouchableOpacity>
+          <Text style={[pls.taskLabel, task.done && pls.taskLabelDone]}>{task.label}</Text>
+          <View style={[pls.priBadge, {
+            backgroundColor: task.priority === "high" ? C.dangerBg : task.priority === "medium" ? C.amberBg : C.successBg
+          }]}>
+            <View style={[pls.priDot, {
+              backgroundColor: task.priority === "high" ? C.danger : task.priority === "medium" ? C.amber : C.success
+            }]} />
+          </View>
+          <TouchableOpacity onPress={() => removeTask(task.id)} style={pls.deleteBtn}>
+            <MaterialCommunityIcons name="close" size={14} color={C.textMuted} />
+          </TouchableOpacity>
+        </View>
       ))}
 
-      {showAdd ? (
-        <View style={styles.addTaskForm}>
-          <TextInput
-            style={styles.addInput}
-            placeholder="Task name..."
-            placeholderTextColor={C.textMuted}
-            value={newLabel}
-            onChangeText={setNewLabel}
-            autoFocus
-          />
-          <View style={styles.addOptions}>
-            {(["morning", "afternoon", "evening", "anytime"] as PlannerTask["category"][]).map((cat) => (
-              <TouchableOpacity key={cat} onPress={() => setNewCategory(cat)} style={[styles.addChip, newCategory === cat && { backgroundColor: categoryColors[cat] + "33", borderColor: categoryColors[cat] }]}>
-                <Text style={[styles.addChipText, newCategory === cat && { color: categoryColors[cat] }]}>{cat}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <View style={styles.addRow}>
-            <TouchableOpacity onPress={() => setShowAdd(false)} style={styles.cancelBtn}>
-              <Text style={styles.cancelBtnText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={addTask} style={styles.saveBtn}>
-              <Text style={styles.saveBtnText}>Add Task</Text>
-            </TouchableOpacity>
-          </View>
+      {totalCount === 0 && (
+        <View style={pls.empty}>
+          <Text style={pls.emptyText}>No tasks for today. Add one above.</Text>
         </View>
-      ) : (
-        <TouchableOpacity onPress={() => setShowAdd(true)} style={styles.addTaskBtn}>
-          <MaterialCommunityIcons name="plus" size={18} color={C.amber} />
-          <Text style={styles.addTaskText}>Add Task</Text>
-        </TouchableOpacity>
       )}
     </View>
   );
-}
+});
 
-// ─── Weekly Routine Grid ──────────────────────────────────────────────────────
-function WeeklyGrid() {
-  const { mindset } = useMindset();
-  const today = new Date().toLocaleDateString("en-US", { weekday: "short" }).slice(0, 3);
+const pls = StyleSheet.create({
+  card: { backgroundColor: C.bgCard, borderWidth: 1, borderColor: C.border, borderRadius: R.card, padding: 16, marginBottom: 16 },
+  header: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 },
+  title: { fontFamily: "Inter_600SemiBold", fontSize: 16, color: C.text, flex: 1 },
+  progress: { fontFamily: "Inter_600SemiBold", fontSize: 13, color: C.amber },
+  progressBar: { height: 4, backgroundColor: C.bgElevated, borderRadius: 2, overflow: "hidden", marginBottom: 14 },
+  progressFill: { height: 4, borderRadius: 2, backgroundColor: C.amber },
+  addRow: { flexDirection: "row", gap: 8, marginBottom: 10 },
+  addInput: {
+    flex: 1, backgroundColor: C.bgElevated, borderWidth: 1, borderColor: C.border,
+    borderRadius: R.button, paddingVertical: 10, paddingHorizontal: 14,
+    fontFamily: "Inter_400Regular", fontSize: 14, color: C.text,
+  },
+  addBtn: {
+    width: 42, height: 42, borderRadius: R.button,
+    backgroundColor: C.amber, alignItems: "center", justifyContent: "center",
+  },
+  priRow: { flexDirection: "row", gap: 8, marginBottom: 14 },
+  priChip: { flex: 1, padding: 8, borderRadius: R.button, backgroundColor: C.bgElevated, borderWidth: 1, borderColor: C.border, alignItems: "center" },
+  priChipActive: { backgroundColor: C.amberBg, borderColor: C.amberBorder },
+  priText: { fontFamily: "Inter_500Medium", fontSize: 12, color: C.textMuted },
+  taskRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: C.border },
+  checkbox: {
+    width: 22, height: 22, borderRadius: 6,
+    borderWidth: 2, borderColor: C.borderMid,
+    alignItems: "center", justifyContent: "center",
+  },
+  checkboxDone: { backgroundColor: C.successBg, borderColor: C.success },
+  taskLabel: { fontFamily: "Inter_400Regular", fontSize: 14, color: C.text, flex: 1 },
+  taskLabelDone: { textDecorationLine: "line-through", color: C.textMuted },
+  priBadge: { width: 18, height: 18, borderRadius: 9, alignItems: "center", justifyContent: "center" },
+  priDot: { width: 6, height: 6, borderRadius: 3 },
+  deleteBtn: { padding: 4 },
+  empty: { paddingVertical: 20, alignItems: "center" },
+  emptyText: { fontFamily: "Inter_400Regular", fontSize: 13, color: C.textMuted },
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// MAIN SCREEN
+// ════════════════════════════════════════════════════════════════════════════
+
+export default memo(function MindsetScreen() {
   return (
-    <View style={styles.weekGrid}>
-      {DAYS.map((day) => {
-        const routine = mindset.weeklyRoutine.find((r) => r.day === day);
-        const blockCount = routine?.blocks.length ?? 0;
-        const isToday = day === today;
-        return (
-          <View key={day} style={[styles.weekDay, isToday && styles.weekDayToday]}>
-            <Text style={[styles.weekDayLabel, isToday && { color: C.amber }]}>{day}</Text>
-            <Text style={styles.weekDayBlocks}>
-              {blockCount > 0 ? `${blockCount} block${blockCount > 1 ? "s" : ""}` : "—"}
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
+      <SafeAreaView style={{ flex: 1 }}>
+        <ScrollView
+          contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16 }}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={{ marginBottom: 20 }}>
+            <Text style={{ fontFamily: "Inter_700Bold", fontSize: 24, color: C.text, letterSpacing: -0.5 }}>
+              Mindset
+            </Text>
+            <Text style={{ fontFamily: "Inter_400Regular", fontSize: 13, color: C.textMuted, marginTop: 4 }}>
+              Focus, time management, and recovery.
             </Text>
           </View>
-        );
-      })}
-    </View>
-  );
-}
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
-export default function MindsetScreen() {
-  const { mindset, updateBedtime, updateScreenTime, updateFocusSession } = useMindset();
+          <ScreenTimeSection />
+          <PomodoroSection />
+          <BedtimeSection />
+          <PlannerSection />
 
-  const bedtime = mindset.bedtime;
-  const screenTime = mindset.screenTime;
-
-  const fmt = (h: number, m: number) => `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
-
-  return (
-    <LinearGradient colors={["#07060F", "#0D0B1E", "#07060F"]} style={styles.gradient}>
-      <SafeAreaView style={styles.safe}>
-        <ScrollView contentContainerStyle={styles.scroll}>
-          {/* Header */}
-          <View style={styles.header}>
-            <MaterialCommunityIcons name="brain" size={22} color={C.blue} />
-            <Text style={styles.headerTitle}>Mindset & Routine</Text>
-          </View>
-          <Text style={styles.headerSub}>Build habits, own your time.</Text>
-
-          {/* Streak Banner */}
-          {mindset.streakDays > 0 && (
-            <View style={styles.streakBanner}>
-              <Text style={styles.streakFire}>🔥</Text>
-              <Text style={styles.streakText}>{mindset.streakDays} day streak — keep it going!</Text>
-            </View>
-          )}
-
-          {/* Focus Sessions (Pomodoro) */}
-          <Section title="Focus Timer" icon="timer-outline" color={C.amber}>
-            <PomodoroTimer />
-            <View style={styles.divider} />
-            <Row
-              label="Work Duration"
-              sub={`${mindset.focusSession.workMin} minutes`}
-              right={
-                <View style={styles.numberAdjust}>
-                  <TouchableOpacity onPress={() => { mindset.focusSession.workMin > 5 && updateFocusSession({ ...mindset.focusSession, workMin: mindset.focusSession.workMin - 5 }); }} style={styles.adjustBtn}>
-                    <MaterialCommunityIcons name="minus" size={14} color={C.textSub} />
-                  </TouchableOpacity>
-                  <Text style={styles.adjustValue}>{mindset.focusSession.workMin}m</Text>
-                  <TouchableOpacity onPress={() => updateFocusSession({ ...mindset.focusSession, workMin: mindset.focusSession.workMin + 5 })} style={styles.adjustBtn}>
-                    <MaterialCommunityIcons name="plus" size={14} color={C.textSub} />
-                  </TouchableOpacity>
-                </View>
-              }
-            />
-            <View style={styles.divider} />
-            <Row
-              label="Break Duration"
-              sub={`${mindset.focusSession.breakMin} minutes`}
-              right={
-                <View style={styles.numberAdjust}>
-                  <TouchableOpacity onPress={() => { mindset.focusSession.breakMin > 1 && updateFocusSession({ ...mindset.focusSession, breakMin: mindset.focusSession.breakMin - 1 }); }} style={styles.adjustBtn}>
-                    <MaterialCommunityIcons name="minus" size={14} color={C.textSub} />
-                  </TouchableOpacity>
-                  <Text style={styles.adjustValue}>{mindset.focusSession.breakMin}m</Text>
-                  <TouchableOpacity onPress={() => updateFocusSession({ ...mindset.focusSession, breakMin: mindset.focusSession.breakMin + 1 })} style={styles.adjustBtn}>
-                    <MaterialCommunityIcons name="plus" size={14} color={C.textSub} />
-                  </TouchableOpacity>
-                </View>
-              }
-            />
-          </Section>
-
-          {/* Daily Planner */}
-          <Section title="Daily Planner" icon="calendar-check-outline" color={C.blue}>
-            <DailyPlanner />
-          </Section>
-
-          {/* Weekly Routine */}
-          <Section title="Weekly Overview" icon="calendar-week" color={C.purple}>
-            <WeeklyGrid />
-            <Text style={styles.routineHint}>Long-press a day to set your blocks (coming in next update)</Text>
-          </Section>
-
-          {/* Bedtime */}
-          <Section title="Bedtime Routine" icon="bed-clock" color={C.cyan}>
-            <Row
-              label="Enable Bedtime"
-              sub="Remind you when to wind down"
-              right={
-                <Switch
-                  value={bedtime.enabled}
-                  onValueChange={(v) => updateBedtime({ ...bedtime, enabled: v })}
-                  thumbColor={bedtime.enabled ? C.cyan : "#555"}
-                  trackColor={{ false: "#333", true: C.cyan + "44" }}
-                />
-              }
-            />
-            {bedtime.enabled && (
-              <>
-                <View style={styles.divider} />
-                <Row
-                  label="Bedtime"
-                  sub="You'll get a reminder before this"
-                  right={<Text style={styles.timeValue}>{fmt(bedtime.bedHour, bedtime.bedMin)}</Text>}
-                />
-                <View style={styles.divider} />
-                <Row
-                  label="Wake Time"
-                  sub="Start of your day"
-                  right={<Text style={styles.timeValue}>{fmt(bedtime.wakeHour, bedtime.wakeMin)}</Text>}
-                />
-                <View style={styles.divider} />
-                <Row
-                  label="Remind me"
-                  sub="Minutes before bedtime"
-                  right={
-                    <View style={styles.numberAdjust}>
-                      <TouchableOpacity onPress={() => { bedtime.reminderMinsBefore > 5 && updateBedtime({ ...bedtime, reminderMinsBefore: bedtime.reminderMinsBefore - 5 }); }} style={styles.adjustBtn}>
-                        <MaterialCommunityIcons name="minus" size={14} color={C.textSub} />
-                      </TouchableOpacity>
-                      <Text style={styles.adjustValue}>{bedtime.reminderMinsBefore}m</Text>
-                      <TouchableOpacity onPress={() => updateBedtime({ ...bedtime, reminderMinsBefore: bedtime.reminderMinsBefore + 5 })} style={styles.adjustBtn}>
-                        <MaterialCommunityIcons name="plus" size={14} color={C.textSub} />
-                      </TouchableOpacity>
-                    </View>
-                  }
-                />
-              </>
-            )}
-          </Section>
-
-          {/* Screen Time */}
-          <Section title="Screen Time" icon="cellphone-off" color={C.danger}>
-            <Row
-              label="Enable Limit"
-              sub="Get warned when limit is near"
-              right={
-                <Switch
-                  value={screenTime.enabled}
-                  onValueChange={(v) => updateScreenTime({ ...screenTime, enabled: v })}
-                  thumbColor={screenTime.enabled ? C.danger : "#555"}
-                  trackColor={{ false: "#333", true: C.danger + "44" }}
-                />
-              }
-            />
-            {screenTime.enabled && (
-              <>
-                <View style={styles.divider} />
-                <Row
-                  label="Daily Limit"
-                  right={
-                    <View style={styles.numberAdjust}>
-                      <TouchableOpacity onPress={() => { screenTime.dailyLimitMin > 15 && updateScreenTime({ ...screenTime, dailyLimitMin: screenTime.dailyLimitMin - 15 }); }} style={styles.adjustBtn}>
-                        <MaterialCommunityIcons name="minus" size={14} color={C.textSub} />
-                      </TouchableOpacity>
-                      <Text style={styles.adjustValue}>{screenTime.dailyLimitMin}m</Text>
-                      <TouchableOpacity onPress={() => updateScreenTime({ ...screenTime, dailyLimitMin: screenTime.dailyLimitMin + 15 })} style={styles.adjustBtn}>
-                        <MaterialCommunityIcons name="plus" size={14} color={C.textSub} />
-                      </TouchableOpacity>
-                    </View>
-                  }
-                />
-                <View style={styles.divider} />
-                <Row
-                  label="Cool Down After Limit"
-                  sub="Lock screen for this long after limit"
-                  right={
-                    <View style={styles.numberAdjust}>
-                      <TouchableOpacity onPress={() => { screenTime.cooldownMin > 1 && updateScreenTime({ ...screenTime, cooldownMin: screenTime.cooldownMin - 1 }); }} style={styles.adjustBtn}>
-                        <MaterialCommunityIcons name="minus" size={14} color={C.textSub} />
-                      </TouchableOpacity>
-                      <Text style={styles.adjustValue}>{screenTime.cooldownMin}m</Text>
-                      <TouchableOpacity onPress={() => updateScreenTime({ ...screenTime, cooldownMin: screenTime.cooldownMin + 1 })} style={styles.adjustBtn}>
-                        <MaterialCommunityIcons name="plus" size={14} color={C.textSub} />
-                      </TouchableOpacity>
-                    </View>
-                  }
-                />
-              </>
-            )}
-          </Section>
-
-          <View style={{ height: 90 }} />
+          <View style={{ height: 100 }} />
         </ScrollView>
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
-}
-
-const styles = StyleSheet.create({
-  gradient: { flex: 1 },
-  safe: { flex: 1 },
-  scroll: { paddingHorizontal: 16, paddingTop: 8 },
-  header: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 4, marginTop: 8 },
-  headerTitle: { fontFamily: "Inter_700Bold", fontSize: 22, color: C.text, letterSpacing: -0.5 },
-  headerSub: { fontFamily: "Inter_400Regular", fontSize: 13, color: C.textMuted, marginBottom: 16 },
-
-  streakBanner: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: C.amberGlow, borderWidth: 1, borderColor: C.amber + "33", borderRadius: 14, padding: 12, marginBottom: 16 },
-  streakFire: { fontSize: 22 },
-  streakText: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: C.amber },
-
-  section: { marginBottom: 16, backgroundColor: C.bgCard, borderWidth: 1, borderColor: C.border, borderRadius: CARD_RADIUS, overflow: "hidden" },
-  sectionHeader: { flexDirection: "row", alignItems: "center", gap: 10, padding: 14 },
-  sectionIcon: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  sectionTitle: { fontFamily: "Inter_600SemiBold", fontSize: 15, color: C.text, flex: 1 },
-  sectionBody: { borderTopWidth: 1, borderTopColor: C.border },
-  divider: { height: 1, backgroundColor: C.border, marginHorizontal: 14 },
-  row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 14 },
-  rowLabel: { fontFamily: "Inter_500Medium", fontSize: 14, color: C.text },
-  rowSub: { fontFamily: "Inter_400Regular", fontSize: 12, color: C.textMuted, marginTop: 2 },
-
-  // Pomodoro
-  pomodoro: { padding: 16, alignItems: "center" },
-  pomodoroTimer: { marginBottom: 12 },
-  pomodoroRing: { width: 140, height: 140, borderRadius: 70, borderWidth: 6, alignItems: "center", justifyContent: "center" },
-  pomodoroFill: { position: "absolute", width: 140, height: 140, borderRadius: 70, borderWidth: 6, borderLeftColor: "transparent", borderBottomColor: "transparent" },
-  pomodoroCenter: { alignItems: "center" },
-  pomodoroTime: { fontFamily: "Inter_700Bold", fontSize: 36, letterSpacing: -2 },
-  pomodoroPhase: { fontFamily: "Inter_500Medium", fontSize: 12, marginTop: 2 },
-  pomodoroSessions: { fontFamily: "Inter_400Regular", fontSize: 12, color: C.textMuted, marginBottom: 12 },
-  pomodoroControls: { flexDirection: "row", alignItems: "center", gap: 20 },
-  pomodoroBtn: { padding: 10, borderRadius: 12, backgroundColor: C.bgElevated },
-  pomodoroPlayBtn: { width: 60, height: 60, borderRadius: 30, borderWidth: 2, alignItems: "center", justifyContent: "center" },
-
-  // Planner
-  progressBar: { height: 6, backgroundColor: C.bgElevated, borderRadius: 3, margin: 14, overflow: "hidden" },
-  progressFill: { height: 6, borderRadius: 3 },
-  progressText: { position: "absolute", right: 0, top: -16, fontFamily: "Inter_500Medium", fontSize: 11, color: C.green },
-  taskRow: { flexDirection: "row", alignItems: "center", gap: 10, padding: 12, paddingHorizontal: 14 },
-  taskDone: { opacity: 0.5 },
-  taskCheck: { width: 20, height: 20, borderRadius: 6, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
-  taskLabel: { flex: 1, fontFamily: "Inter_500Medium", fontSize: 14, color: C.text },
-  taskLabelDone: { textDecorationLine: "line-through", color: C.textMuted },
-  priorityDot: { width: 8, height: 8, borderRadius: 4 },
-  addTaskBtn: { flexDirection: "row", alignItems: "center", gap: 8, padding: 14, borderTopWidth: 1, borderTopColor: C.border },
-  addTaskText: { fontFamily: "Inter_500Medium", fontSize: 14, color: C.amber },
-  addTaskForm: { padding: 14, gap: 10 },
-  addInput: { backgroundColor: C.bgElevated, borderWidth: 1, borderColor: C.border, borderRadius: 12, padding: 12, fontFamily: "Inter_400Regular", fontSize: 14, color: C.text },
-  addOptions: { flexDirection: "row", gap: 6, flexWrap: "wrap" },
-  addChip: { paddingVertical: 5, paddingHorizontal: 10, borderRadius: 8, borderWidth: 1, borderColor: C.border, backgroundColor: C.bgElevated },
-  addChipText: { fontFamily: "Inter_500Medium", fontSize: 11, color: C.textSub },
-  addRow: { flexDirection: "row", gap: 10 },
-  cancelBtn: { flex: 1, padding: 10, borderRadius: 10, backgroundColor: C.bgElevated, alignItems: "center" },
-  cancelBtnText: { fontFamily: "Inter_500Medium", fontSize: 13, color: C.textMuted },
-  saveBtn: { flex: 1, padding: 10, borderRadius: 10, backgroundColor: C.amber + "22", borderWidth: 1, borderColor: C.amber + "55", alignItems: "center" },
-  saveBtnText: { fontFamily: "Inter_600SemiBold", fontSize: 13, color: C.amber },
-
-  // Weekly
-  weekGrid: { flexDirection: "row", justifyContent: "space-between", padding: 14, gap: 4 },
-  weekDay: { flex: 1, alignItems: "center", padding: 6, borderRadius: 10, backgroundColor: C.bgElevated },
-  weekDayToday: { backgroundColor: C.amber + "22", borderWidth: 1, borderColor: C.amber + "44" },
-  weekDayLabel: { fontFamily: "Inter_600SemiBold", fontSize: 11, color: C.textSub },
-  weekDayBlocks: { fontFamily: "Inter_400Regular", fontSize: 9, color: C.textMuted, marginTop: 4, textAlign: "center" },
-  routineHint: { fontFamily: "Inter_400Regular", fontSize: 11, color: C.textMuted, padding: 14, paddingTop: 0 },
-
-  // Common
-  numberAdjust: { flexDirection: "row", alignItems: "center", gap: 6 },
-  adjustBtn: { width: 28, height: 28, borderRadius: 8, backgroundColor: C.bgElevated, alignItems: "center", justifyContent: "center" },
-  adjustValue: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: C.text, minWidth: 32, textAlign: "center" },
-  timeValue: { fontFamily: "Inter_700Bold", fontSize: 18, color: C.amber },
 });

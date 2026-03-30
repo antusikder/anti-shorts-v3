@@ -1,358 +1,397 @@
-import React, { useState } from "react";
+import React, { memo, useCallback, useState } from "react";
 import {
-  View, ScrollView, Text, TouchableOpacity, StyleSheet,
-  Switch, TextInput, Alert, Linking,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  TextInput, Alert, Linking, Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import * as SecureStore from "expo-secure-store";
+import * as Haptics from "expo-haptics";
+import * as Notifications from "expo-notifications";
 import { useSettings } from "@/context/SettingsContext";
 import { useWorkout } from "@/context/WorkoutContext";
-import { useMindset } from "@/context/MindsetContext";
-import { C } from "@/constants/colors";
-import Constants from "expo-constants";
+import { C, R } from "@/constants/colors";
 
-const CARD_RADIUS = 20;
+const BKASH_NUMBER = "+8801581872622";
+const QR_URL = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(BKASH_NUMBER)}&bgcolor=080810&color=F5A623`;
 
-function Section({ children, style }: { children: React.ReactNode; style?: any }) {
-  return <View style={[styles.section, style]}>{children}</View>;
-}
+// ════════════════════════════════════════════════════════════════════════════
+// PIN MANAGEMENT
+// ════════════════════════════════════════════════════════════════════════════
 
-function SettingsRow({
-  icon, color, label, sub, right, onPress,
-}: {
-  icon: string; color: string; label: string; sub?: string;
-  right?: React.ReactNode; onPress?: () => void;
-}) {
-  const content = (
-    <View style={styles.row}>
-      <View style={[styles.rowIcon, { backgroundColor: color + "22" }]}>
-        <MaterialCommunityIcons name={icon as any} size={18} color={color} />
-      </View>
-      <View style={styles.rowText}>
-        <Text style={styles.rowLabel}>{label}</Text>
-        {sub && <Text style={styles.rowSub}>{sub}</Text>}
-      </View>
-      {right ?? (onPress ? <MaterialCommunityIcons name="chevron-right" size={18} color={C.textMuted} /> : null)}
-    </View>
-  );
-
-  return onPress ? (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.7}>{content}</TouchableOpacity>
-  ) : (
-    content
-  );
-}
-
-function Divider() {
-  return <View style={styles.divider} />;
-}
-
-function PinEntryModal({ visible, onSuccess, onCancel }: {
-  visible: boolean; onSuccess: () => void; onCancel: () => void;
-}) {
-  const { mindset } = useMindset();
-  const [input, setInput] = useState("");
-
-  const handleDigit = (d: string) => {
-    const next = input + d;
-    if (next.length > 4) return;
-    setInput(next);
-    if (next.length === 4) {
-      if (next === mindset.pin) {
-        setInput("");
-        onSuccess();
-      } else {
-        setInput("");
-        Alert.alert("Wrong PIN");
-      }
-    }
-  };
-
-  const dots = Array(4).fill(0).map((_, i) => (
-    <View key={i} style={[styles.pinDot, input.length > i && styles.pinDotFilled]} />
-  ));
-
-  const pad = ["1","2","3","4","5","6","7","8","9","","0","⌫"];
-
-  if (!visible) return null;
-
-  return (
-    <View style={styles.pinOverlay}>
-      <View style={styles.pinCard}>
-        <Text style={styles.pinTitle}>Enter PIN</Text>
-        <View style={styles.pinDots}>{dots}</View>
-        <View style={styles.pinGrid}>
-          {pad.map((d, i) => (
-            d === "" ? <View key={i} style={styles.pinKeyEmpty} /> :
-            <TouchableOpacity key={i} onPress={() => d === "⌫" ? setInput(p => p.slice(0, -1)) : handleDigit(d)} style={styles.pinKey}>
-              <Text style={styles.pinKeyText}>{d}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-        <TouchableOpacity onPress={onCancel} style={styles.pinCancel}>
-          <Text style={styles.pinCancelText}>Cancel</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-}
-
-export default function SettingsScreen() {
-  const { settings, resetStats } = useSettings();
-  const { workout, updateSettings: updateWorkoutSettings } = useWorkout();
-  const { mindset, setPin } = useMindset();
-
+const PinSection = memo(() => {
+  const [currentPin, setCurrentPin] = useState("");
   const [newPin, setNewPin] = useState("");
-  const [settingPin, setSettingPin] = useState(false);
-  const appVersion = Constants.expoConfig?.version ?? "4.1.3";
+  const [confirmPin, setConfirmPin] = useState("");
+  const [hasPin, setHasPin] = useState<boolean | null>(null);
 
-  const wSettings = workout.settings;
+  // Check if PIN exists
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const stored = await SecureStore.getItemAsync("app_pin");
+        setHasPin(!!stored);
+      } catch {
+        setHasPin(false);
+      }
+    })();
+  }, []);
 
-  const handleResetStats = () => {
-    Alert.alert("Reset Stats", "This will clear all today's blocked counts. Continue?", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Reset", style: "destructive", onPress: resetStats },
-    ]);
-  };
-
-  const handleSetPin = () => {
-    if (newPin.length !== 4 || !/^\d{4}$/.test(newPin)) {
-      Alert.alert("Invalid PIN", "PIN must be exactly 4 digits.");
+  const savePin = async () => {
+    if (newPin.length !== 4) {
+      Alert.alert("Error", "PIN must be exactly 4 digits.");
       return;
     }
-    setPin(newPin);
-    setNewPin("");
-    setSettingPin(false);
-    Alert.alert("PIN Set", "App lock is now active.");
+    if (newPin !== confirmPin) {
+      Alert.alert("Error", "PINs don't match. Try again.");
+      return;
+    }
+    if (hasPin) {
+      // Verify current PIN
+      const stored = await SecureStore.getItemAsync("app_pin");
+      if (currentPin !== stored) {
+        Alert.alert("Error", "Current PIN is incorrect.");
+        return;
+      }
+    }
+    try {
+      await SecureStore.setItemAsync("app_pin", newPin);
+      setHasPin(true);
+      setCurrentPin("");
+      setNewPin("");
+      setConfirmPin("");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert("Success", "PIN has been saved. It will be required on next app launch.");
+    } catch {
+      Alert.alert("Error", "Failed to save PIN.");
+    }
   };
 
-  const handleRemovePin = () => {
-    Alert.alert("Remove PIN", "This will disable app lock.", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Remove", style: "destructive", onPress: () => setPin(null) },
-    ]);
+  const removePin = async () => {
+    const stored = await SecureStore.getItemAsync("app_pin");
+    if (currentPin !== stored) {
+      Alert.alert("Error", "Current PIN is incorrect.");
+      return;
+    }
+    try {
+      await SecureStore.deleteItemAsync("app_pin");
+      setHasPin(false);
+      setCurrentPin("");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert("Removed", "App lock PIN has been removed.");
+    } catch {
+      Alert.alert("Error", "Failed to remove PIN.");
+    }
   };
 
   return (
-    <LinearGradient colors={["#07060F", "#0D0B1E", "#07060F"]} style={styles.gradient}>
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <MaterialCommunityIcons name="arrow-left" size={22} color={C.text} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Settings</Text>
+    <View style={sec.card}>
+      <View style={sec.header}>
+        <MaterialCommunityIcons name="lock" size={20} color={C.amber} />
+        <Text style={sec.title}>App Lock PIN</Text>
+        <View style={[sec.badge, { backgroundColor: hasPin ? C.successBg : C.dangerBg }]}>
+          <Text style={[sec.badgeText, { color: hasPin ? C.success : C.danger }]}>
+            {hasPin ? "Active" : "Not Set"}
+          </Text>
         </View>
+      </View>
 
-        <ScrollView contentContainerStyle={styles.scroll}>
+      {hasPin && (
+        <View style={sec.inputRow}>
+          <Text style={sec.inputLabel}>Current PIN</Text>
+          <TextInput
+            style={sec.pinInput}
+            value={currentPin}
+            onChangeText={setCurrentPin}
+            keyboardType="number-pad"
+            secureTextEntry
+            maxLength={4}
+            placeholder="····"
+            placeholderTextColor={C.textMuted}
+          />
+        </View>
+      )}
 
-          {/* Profile & Fitness */}
-          <Text style={styles.sectionLabel}>Fitness Profile</Text>
-          <Section>
-            <SettingsRow
-              icon="human-male-height"
-              color={C.blue}
-              label="Height"
-              sub={`${wSettings.height} cm`}
-              onPress={() => Alert.prompt("Height (cm)", "", (val) => val && updateWorkoutSettings({ height: parseInt(val) || wSettings.height }))}
-            />
-            <Divider />
-            <SettingsRow
-              icon="weight"
-              color={C.green}
-              label="Weight"
-              sub={`${wSettings.weight} kg`}
-              onPress={() => Alert.prompt("Weight (kg)", "", (val) => val && updateWorkoutSettings({ weight: parseFloat(val) || wSettings.weight }))}
-            />
-            <Divider />
-            <SettingsRow
-              icon="cake-variant-outline"
-              color={C.amber}
-              label="Age"
-              sub={`${wSettings.age} years`}
-              onPress={() => Alert.prompt("Age", "", (val) => val && updateWorkoutSettings({ age: parseInt(val) || wSettings.age }))}
-            />
-            <Divider />
-            <SettingsRow
-              icon="gender-male-female"
-              color={C.purple}
-              label="Gender"
-              sub={wSettings.gender === "male" ? "Male" : "Female"}
-              onPress={() => Alert.alert("Select Gender", "", [
-                { text: "Male", onPress: () => updateWorkoutSettings({ gender: "male" }) },
-                { text: "Female", onPress: () => updateWorkoutSettings({ gender: "female" }) },
-                { text: "Cancel", style: "cancel" },
-              ])}
-            />
-            <Divider />
-            <SettingsRow
-              icon="run"
-              color={C.cyan}
-              label="Activity Level"
-              sub={wSettings.activityLevel.charAt(0).toUpperCase() + wSettings.activityLevel.slice(1)}
-              onPress={() => Alert.alert("Activity Level", "", [
-                { text: "Sedentary", onPress: () => updateWorkoutSettings({ activityLevel: "sedentary" }) },
-                { text: "Light", onPress: () => updateWorkoutSettings({ activityLevel: "light" }) },
-                { text: "Moderate", onPress: () => updateWorkoutSettings({ activityLevel: "moderate" }) },
-                { text: "Active", onPress: () => updateWorkoutSettings({ activityLevel: "active" }) },
-                { text: "Athlete", onPress: () => updateWorkoutSettings({ activityLevel: "athlete" }) },
-                { text: "Cancel", style: "cancel" },
-              ])}
-            />
-          </Section>
+      <View style={sec.inputRow}>
+        <Text style={sec.inputLabel}>{hasPin ? "New PIN" : "Set PIN"}</Text>
+        <TextInput
+          style={sec.pinInput}
+          value={newPin}
+          onChangeText={setNewPin}
+          keyboardType="number-pad"
+          secureTextEntry
+          maxLength={4}
+          placeholder="····"
+          placeholderTextColor={C.textMuted}
+        />
+      </View>
 
-          {/* Security */}
-          <Text style={styles.sectionLabel}>Security</Text>
-          <Section>
-            <SettingsRow
-              icon="lock-outline"
-              color={C.amber}
-              label="App PIN Lock"
-              sub={mindset.pin ? "Enabled — tap to change" : "Not set"}
-              onPress={() => setSettingPin(!settingPin)}
-            />
-            {settingPin && (
-              <View style={styles.pinInputRow}>
-                <TextInput
-                  style={styles.pinInput}
-                  placeholder="Enter new 4-digit PIN"
-                  placeholderTextColor={C.textMuted}
-                  value={newPin}
-                  onChangeText={(v) => setNewPin(v.replace(/\D/g, "").slice(0, 4))}
-                  keyboardType="number-pad"
-                  secureTextEntry
-                  maxLength={4}
-                />
-                <TouchableOpacity onPress={handleSetPin} style={styles.setPinBtn}>
-                  <Text style={styles.setPinBtnText}>Set</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-            {mindset.pin && (
-              <>
-                <Divider />
-                <SettingsRow icon="lock-remove-outline" color={C.danger} label="Remove PIN" onPress={handleRemovePin} />
-              </>
-            )}
-          </Section>
+      <View style={sec.inputRow}>
+        <Text style={sec.inputLabel}>Confirm PIN</Text>
+        <TextInput
+          style={sec.pinInput}
+          value={confirmPin}
+          onChangeText={setConfirmPin}
+          keyboardType="number-pad"
+          secureTextEntry
+          maxLength={4}
+          placeholder="····"
+          placeholderTextColor={C.textMuted}
+        />
+      </View>
 
-          {/* Data */}
-          <Text style={styles.sectionLabel}>Data</Text>
-          <Section>
-            <SettingsRow
-              icon="refresh"
-              color={C.danger}
-              label="Reset Today's Stats"
-              sub="Clears blocked counts for today"
-              onPress={handleResetStats}
-            />
-          </Section>
+      <View style={{ flexDirection: "row", gap: 10 }}>
+        <TouchableOpacity style={sec.saveBtn} onPress={savePin} activeOpacity={0.85}>
+          <Text style={sec.saveBtnText}>{hasPin ? "Update PIN" : "Set PIN"}</Text>
+        </TouchableOpacity>
+        {hasPin && (
+          <TouchableOpacity style={sec.deleteBtn} onPress={removePin} activeOpacity={0.85}>
+            <Text style={sec.deleteBtnText}>Remove</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// FITNESS PROFILE
+// ════════════════════════════════════════════════════════════════════════════
+
+const FitnessProfile = memo(() => {
+  const { workout, updateSettings } = useWorkout();
+  const s = workout.settings;
+
+  const [weight, setWeight] = useState(s.weight.toString());
+  const [height, setHeight] = useState(s.height.toString());
+  const [age, setAge] = useState(s.age.toString());
+
+  const save = () => {
+    updateSettings({
+      weight: parseFloat(weight) || 70,
+      height: parseFloat(height) || 170,
+      age: parseInt(age) || 25,
+    });
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    Alert.alert("Saved", "Fitness profile updated.");
+  };
+
+  return (
+    <View style={sec.card}>
+      <View style={sec.header}>
+        <MaterialCommunityIcons name="human" size={20} color={C.amber} />
+        <Text style={sec.title}>Fitness Profile</Text>
+      </View>
+
+      <View style={sec.inputRow}>
+        <Text style={sec.inputLabel}>Weight (kg)</Text>
+        <TextInput style={sec.numInput} value={weight} onChangeText={setWeight} keyboardType="numeric" selectTextOnFocus />
+      </View>
+      <View style={sec.inputRow}>
+        <Text style={sec.inputLabel}>Height (cm)</Text>
+        <TextInput style={sec.numInput} value={height} onChangeText={setHeight} keyboardType="numeric" selectTextOnFocus />
+      </View>
+      <View style={sec.inputRow}>
+        <Text style={sec.inputLabel}>Age</Text>
+        <TextInput style={sec.numInput} value={age} onChangeText={setAge} keyboardType="numeric" selectTextOnFocus />
+      </View>
+
+      <TouchableOpacity style={sec.saveBtn} onPress={save} activeOpacity={0.85}>
+        <Text style={sec.saveBtnText}>Save Profile</Text>
+      </TouchableOpacity>
+    </View>
+  );
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// SUPPORT / TIP JAR
+// ════════════════════════════════════════════════════════════════════════════
+
+const SupportSection = memo(() => {
+  const openBkash = () => {
+    Linking.openURL(`tel:${BKASH_NUMBER}`).catch(() => {
+      Alert.alert("bKash / Nagad", `Send to: ${BKASH_NUMBER}`);
+    });
+  };
+
+  return (
+    <View style={sec.card}>
+      <View style={sec.header}>
+        <MaterialCommunityIcons name="heart" size={20} color={C.amber} />
+        <Text style={sec.title}>Support Development</Text>
+      </View>
+
+      <Text style={sec.desc}>
+        If Fresh Mind Elite is helping you stay focused, consider supporting the developer via bKash or Nagad.
+      </Text>
+
+      <TouchableOpacity onPress={openBkash} style={sec.qrWrap} activeOpacity={0.85}>
+        <Image
+          source={{ uri: QR_URL }}
+          style={sec.qrImage}
+          resizeMode="contain"
+        />
+        <Text style={sec.qrNum}>{BKASH_NUMBER}</Text>
+        <Text style={sec.qrHint}>Tap to call · bKash / Nagad</Text>
+      </TouchableOpacity>
+    </View>
+  );
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// NOTIFICATIONS TEST
+// ════════════════════════════════════════════════════════════════════════════
+
+const NotificationTest = memo(() => {
+  const testNotification = async () => {
+    try {
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: "Fresh Mind Elite System",
+          body: "Push notifications are successfully configured and active.",
+        },
+        trigger: null,
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {
+      Alert.alert("Error", "Failed to send test notification. Check your notification permissions.");
+    }
+  };
+
+  return (
+    <View style={sec.card}>
+      <View style={sec.header}>
+        <MaterialCommunityIcons name="bell-ring" size={20} color={C.amber} />
+        <Text style={sec.title}>Notifications</Text>
+      </View>
+      <TouchableOpacity style={sec.saveBtn} onPress={testNotification} activeOpacity={0.85}>
+        <Text style={sec.saveBtnText}>Send Test Notification</Text>
+      </TouchableOpacity>
+    </View>
+  );
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// DATA MANAGEMENT
+// ════════════════════════════════════════════════════════════════════════════
+
+const DataSection = memo(() => {
+  const { resetStats } = useSettings();
+
+  const handleReset = () => {
+    Alert.alert(
+      "Reset Stats",
+      "This will reset all shield stats to zero. This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Reset",
+          style: "destructive",
+          onPress: () => {
+            resetStats();
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          },
+        },
+      ]
+    );
+  };
+
+  return (
+    <View style={sec.card}>
+      <View style={sec.header}>
+        <MaterialCommunityIcons name="database" size={20} color={C.amber} />
+        <Text style={sec.title}>Data</Text>
+      </View>
+      <TouchableOpacity style={sec.deleteBtn} onPress={handleReset} activeOpacity={0.85}>
+        <Text style={sec.deleteBtnText}>Reset Shield Stats</Text>
+      </TouchableOpacity>
+    </View>
+  );
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// MAIN SCREEN
+// ════════════════════════════════════════════════════════════════════════════
+
+export default memo(function SettingsScreen() {
+  return (
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
+      <SafeAreaView style={{ flex: 1 }}>
+        <ScrollView
+          contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16 }}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Header with back button */}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 20 }}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: C.bgCard, borderWidth: 1, borderColor: C.border, alignItems: "center", justifyContent: "center" }}
+              activeOpacity={0.85}
+            >
+              <MaterialCommunityIcons name="arrow-left" size={20} color={C.text} />
+            </TouchableOpacity>
+            <View>
+              <Text style={{ fontFamily: "Inter_700Bold", fontSize: 24, color: C.text, letterSpacing: -0.5 }}>
+                Settings
+              </Text>
+              <Text style={{ fontFamily: "Inter_400Regular", fontSize: 13, color: C.textMuted, marginTop: 2 }}>
+                Security, profiles, and support.
+              </Text>
+            </View>
+          </View>
+
+          <PinSection />
+          <FitnessProfile />
+          <NotificationTest />
+          <SupportSection />
+          <DataSection />
 
           {/* About */}
-          <Text style={styles.sectionLabel}>About</Text>
-          <Section>
-            <SettingsRow icon="shield-crown" color={C.amber} label="Fresh Mind Elite" sub={`Version ${appVersion}`} />
-            <Divider />
-            <SettingsRow
-              icon="github"
-              color={C.textMuted}
-              label="Open Source"
-              sub="Built with Expo React Native"
-              onPress={() => Linking.openURL("https://github.com")}
-            />
-          </Section>
-
-          {/* Tip Jar */}
-          <View style={styles.tipCard}>
-            <LinearGradient colors={[C.amberGlow, "transparent"]} style={StyleSheet.absoluteFill} />
-            <Text style={styles.tipEmoji}>☕</Text>
-            <Text style={styles.tipTitle}>Buy Me a Coffee</Text>
-            <Text style={styles.tipSub}>
-              This app took months of effort to build. If it helps you focus, consider sending a tip!
+          <View style={[sec.card, { alignItems: "center" }]}>
+            <MaterialCommunityIcons name="shield-crown" size={32} color={C.amber} style={{ marginBottom: 8 }} />
+            <Text style={{ fontFamily: "Inter_700Bold", fontSize: 16, color: C.text, marginBottom: 4 }}>
+              Fresh Mind Elite Engine
             </Text>
-            <View style={styles.tipMethods}>
-              <View style={styles.tipMethod}>
-                <Text style={styles.tipMethodLabel}>bKash / Nagad</Text>
-                <Text style={styles.tipMethodValue}>01XXXXXXXXXX</Text>
-              </View>
-            </View>
-            <TouchableOpacity
-              onPress={() => Alert.alert("Thank You!", "Your support means everything! 🙏")}
-              style={styles.tipBtn}
-            >
-              <Text style={styles.tipBtnText}>❤️ Say Thanks</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Credits */}
-          <View style={styles.creditsCard}>
-            <Text style={styles.creditsTitle}>Credits</Text>
-            <Text style={styles.creditsText}>
-              Designed & developed with care.{"\n"}
-              Powered by Expo, React Native, and the open source community.{"\n\n"}
-              Special thanks to everyone who provided feedback and helped shape Fresh Mind Elite.
+            <Text style={{ fontFamily: "Inter_400Regular", fontSize: 11, color: C.textMuted, marginTop: 2 }}>
+              v5.0 · Built with Precision
             </Text>
           </View>
 
-          <View style={{ height: 50 }} />
+          <View style={{ height: 60 }} />
         </ScrollView>
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
-}
+});
 
-const styles = StyleSheet.create({
-  gradient: { flex: 1 },
-  safe: { flex: 1 },
-  header: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 },
-  backBtn: { padding: 4 },
-  headerTitle: { fontFamily: "Inter_700Bold", fontSize: 20, color: C.text },
-  scroll: { paddingHorizontal: 16 },
-
-  sectionLabel: { fontFamily: "Inter_600SemiBold", fontSize: 11, color: C.textMuted, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8, marginTop: 16 },
-  section: { backgroundColor: C.bgCard, borderWidth: 1, borderColor: C.border, borderRadius: CARD_RADIUS, marginBottom: 4, overflow: "hidden" },
-
-  row: { flexDirection: "row", alignItems: "center", padding: 14, gap: 12 },
-  rowIcon: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  rowText: { flex: 1 },
-  rowLabel: { fontFamily: "Inter_500Medium", fontSize: 14, color: C.text },
-  rowSub: { fontFamily: "Inter_400Regular", fontSize: 12, color: C.textMuted, marginTop: 2 },
-  divider: { height: 1, backgroundColor: C.border, marginHorizontal: 14 },
-
-  pinInputRow: { flexDirection: "row", alignItems: "center", gap: 10, padding: 14, borderTopWidth: 1, borderTopColor: C.border },
-  pinInput: { flex: 1, backgroundColor: C.bgElevated, borderWidth: 1, borderColor: C.border, borderRadius: 12, padding: 12, fontFamily: "Inter_400Regular", fontSize: 18, color: C.text, textAlign: "center", letterSpacing: 8 },
-  setPinBtn: { backgroundColor: C.amber + "22", borderWidth: 1, borderColor: C.amber + "55", borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12 },
-  setPinBtnText: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: C.amber },
-
-  // PIN overlay
-  pinOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.8)", alignItems: "center", justifyContent: "center", zIndex: 100 },
-  pinCard: { backgroundColor: "#0D0B1E", borderRadius: 24, padding: 24, width: "80%", alignItems: "center", borderWidth: 1, borderColor: C.border },
-  pinTitle: { fontFamily: "Inter_700Bold", fontSize: 20, color: C.text, marginBottom: 24 },
-  pinDots: { flexDirection: "row", gap: 14, marginBottom: 24 },
-  pinDot: { width: 14, height: 14, borderRadius: 7, backgroundColor: C.bgElevated, borderWidth: 2, borderColor: C.textMuted },
-  pinDotFilled: { backgroundColor: C.amber, borderColor: C.amber },
-  pinGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12, justifyContent: "center", marginBottom: 16 },
-  pinKey: { width: 70, height: 70, borderRadius: 35, backgroundColor: C.bgCard, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: C.border },
-  pinKeyEmpty: { width: 70, height: 70 },
-  pinKeyText: { fontFamily: "Inter_700Bold", fontSize: 24, color: C.text },
-  pinCancel: { paddingVertical: 8 },
-  pinCancelText: { fontFamily: "Inter_500Medium", fontSize: 14, color: C.textMuted },
-
-  // Tip Jar
-  tipCard: { backgroundColor: C.bgCard, borderWidth: 1, borderColor: C.amber + "33", borderRadius: CARD_RADIUS, padding: 20, marginTop: 16, alignItems: "center", overflow: "hidden" },
-  tipEmoji: { fontSize: 36, marginBottom: 8 },
-  tipTitle: { fontFamily: "Inter_700Bold", fontSize: 18, color: C.amber, marginBottom: 6 },
-  tipSub: { fontFamily: "Inter_400Regular", fontSize: 13, color: C.textSub, textAlign: "center", lineHeight: 20, marginBottom: 16 },
-  tipMethods: { gap: 8, marginBottom: 16, width: "100%" },
-  tipMethod: { backgroundColor: C.bgElevated, borderRadius: 12, padding: 12, alignItems: "center" },
-  tipMethodLabel: { fontFamily: "Inter_500Medium", fontSize: 12, color: C.textMuted },
-  tipMethodValue: { fontFamily: "Inter_700Bold", fontSize: 16, color: C.text, marginTop: 4 },
-  tipBtn: { backgroundColor: C.amber + "22", borderWidth: 1, borderColor: C.amber + "55", borderRadius: 14, paddingVertical: 12, paddingHorizontal: 24 },
-  tipBtnText: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: C.amber },
-
-  // Credits
-  creditsCard: { marginTop: 16, padding: 20, backgroundColor: C.bgCard, borderRadius: CARD_RADIUS, borderWidth: 1, borderColor: C.border },
-  creditsTitle: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: C.text, marginBottom: 10 },
-  creditsText: { fontFamily: "Inter_400Regular", fontSize: 13, color: C.textMuted, lineHeight: 20 },
+const sec = StyleSheet.create({
+  card: { backgroundColor: C.bgCard, borderWidth: 1, borderColor: C.border, borderRadius: R.card, padding: 16, marginBottom: 16 },
+  header: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 14 },
+  title: { fontFamily: "Inter_600SemiBold", fontSize: 16, color: C.text, flex: 1 },
+  badge: { paddingVertical: 3, paddingHorizontal: 10, borderRadius: R.circle },
+  badgeText: { fontFamily: "Inter_600SemiBold", fontSize: 11 },
+  desc: { fontFamily: "Inter_400Regular", fontSize: 13, color: C.textSub, lineHeight: 20, marginBottom: 16 },
+  inputRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
+  inputLabel: { fontFamily: "Inter_500Medium", fontSize: 14, color: C.textSub },
+  pinInput: {
+    backgroundColor: C.bgElevated, borderWidth: 1, borderColor: C.border,
+    borderRadius: R.button, paddingVertical: 10, paddingHorizontal: 16,
+    fontFamily: "Inter_700Bold", fontSize: 24, color: C.text, textAlign: "center",
+    minWidth: 100, letterSpacing: 8,
+  },
+  numInput: {
+    backgroundColor: C.bgElevated, borderWidth: 1, borderColor: C.border,
+    borderRadius: R.button, paddingVertical: 8, paddingHorizontal: 14,
+    fontFamily: "Inter_600SemiBold", fontSize: 18, color: C.text, textAlign: "center",
+    minWidth: 80,
+  },
+  saveBtn: { flex: 1, backgroundColor: C.amber, borderRadius: R.button, paddingVertical: 12, alignItems: "center" },
+  saveBtnText: { fontFamily: "Inter_700Bold", fontSize: 14, color: C.bg },
+  deleteBtn: { flex: 1, backgroundColor: C.dangerBg, borderWidth: 1, borderColor: C.dangerBorder, borderRadius: R.button, paddingVertical: 12, alignItems: "center" },
+  deleteBtnText: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: C.danger },
+  qrWrap: { alignItems: "center", padding: 20, backgroundColor: C.bgElevated, borderRadius: R.card, borderWidth: 1, borderColor: C.border },
+  qrImage: { width: 180, height: 180, marginBottom: 12 },
+  qrNum: { fontFamily: "Inter_700Bold", fontSize: 18, color: C.amber, marginBottom: 4 },
+  qrHint: { fontFamily: "Inter_400Regular", fontSize: 12, color: C.textMuted },
 });

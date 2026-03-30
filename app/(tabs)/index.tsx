@@ -1,86 +1,35 @@
-import React, { useEffect, useState } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useState } from "react";
 import {
-  View, ScrollView, Text, TouchableOpacity, StyleSheet,
-  RefreshControl, Animated, Platform,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  Dimensions, AppState, AppStateStatus, Alert, Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useSettings } from "@/context/SettingsContext";
 import { useWorkout } from "@/context/WorkoutContext";
 import { useMindset } from "@/context/MindsetContext";
 import { AccessibilityModule } from "@/modules/AccessibilityModule";
-import { C } from "@/constants/colors";
+import { CustomAlert } from "../components/CustomAlert";
+import { C, R } from "@/constants/colors";
 
-const CARD_RADIUS = 20;
+const { width: SW } = Dimensions.get("window");
 
-function GlowCard({ children, color = C.amber, style }: { children: React.ReactNode; color?: string; style?: any }) {
-  return (
-    <View style={[styles.glowCard, { borderColor: color + "33", shadowColor: color }, style]}>
-      {children}
-    </View>
-  );
-}
+// ════════════════════════════════════════════════════════════════════════════
+// SHIELD STATUS HERO
+// ════════════════════════════════════════════════════════════════════════════
 
-function CoreCard({
-  icon, label, subtitle, color, value, onPress,
-}: {
-  icon: string; label: string; subtitle: string; color: string; value: string; onPress: () => void;
-}) {
-  return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.8} style={styles.coreCard}>
-      <LinearGradient colors={[color + "22", color + "08"]} style={StyleSheet.absoluteFill} />
-      <View style={[styles.coreIconWrap, { backgroundColor: color + "25", borderColor: color + "44" }]}>
-        <MaterialCommunityIcons name={icon as any} size={24} color={color} />
-      </View>
-      <Text style={styles.coreLabel}>{label}</Text>
-      <Text style={styles.coreValue}>{value}</Text>
-      <Text style={styles.coreSub}>{subtitle}</Text>
-      <View style={[styles.coreArrow, { backgroundColor: color + "20" }]}>
-        <MaterialCommunityIcons name="chevron-right" size={16} color={color} />
-      </View>
-    </TouchableOpacity>
-  );
-}
-
-function StatBadge({ label, value, color }: { label: string; value: string | number; color: string }) {
-  return (
-    <View style={styles.statBadge}>
-      <Text style={[styles.statValue, { color }]}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-  );
-}
-
-export default function DashboardScreen() {
+const ShieldHero = memo(() => {
   const { settings, setServiceEnabled } = useSettings();
-  const { workout } = useWorkout();
-  const { mindset } = useMindset();
   const [serviceActive, setServiceActive] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [pulseAnim] = useState(new Animated.Value(1));
-
-  const s = settings.stats;
-  const totalToday = s.shortsShieldedToday + s.reelsRejectedToday + s.adsRemovedToday;
 
   useEffect(() => {
     checkService();
+    const sub = AppState.addEventListener("change", (s: AppStateStatus) => {
+      if (s === "active") checkService();
+    });
+    return () => sub.remove();
   }, []);
-
-  // Pulse animation for shield status
-  useEffect(() => {
-    if (serviceActive) {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, { toValue: 1.2, duration: 1000, useNativeDriver: true }),
-          Animated.timing(pulseAnim, { toValue: 1, duration: 1000, useNativeDriver: true }),
-        ])
-      ).start();
-    } else {
-      pulseAnim.setValue(1);
-    }
-  }, [serviceActive]);
 
   const checkService = async () => {
     const enabled = await AccessibilityModule.isServiceEnabled();
@@ -88,177 +37,342 @@ export default function DashboardScreen() {
     setServiceEnabled(enabled);
   };
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await checkService();
-    setRefreshing(false);
-  };
+  return (
+    <TouchableOpacity
+      style={[hero.card, serviceActive ? hero.cardActive : hero.cardInactive]}
+      onPress={() => {
+        if (!serviceActive) {
+          AccessibilityModule.openAccessibilitySettings();
+        }
+      }}
+      activeOpacity={serviceActive ? 1 : 0.85}
+    >
+      <View style={hero.row}>
+        <View style={[hero.iconWrap, { backgroundColor: serviceActive ? C.amberBg : C.dangerBg }]}>
+          <MaterialCommunityIcons
+            name={serviceActive ? "shield-check" : "shield-off"}
+            size={28}
+            color={serviceActive ? C.amber : C.danger}
+          />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={hero.title}>
+            Neural Shield {serviceActive ? "Active" : "Disabled"}
+          </Text>
+          <Text style={hero.subtitle}>
+            {serviceActive
+              ? "Scanning for shorts, reels, and ads in real-time."
+              : "Tap to enable the accessibility service."}
+          </Text>
+        </View>
+        {serviceActive && (
+          <View style={hero.liveDot} />
+        )}
+      </View>
+    </TouchableOpacity>
+  );
+});
 
-  const doneTasks = mindset.todayTasks.filter((t) => t.done).length;
-  const totalTasks = mindset.todayTasks.length;
+const hero = StyleSheet.create({
+  card: { borderRadius: R.card, padding: 16, marginBottom: 16, borderWidth: 1 },
+  cardActive: { backgroundColor: C.bgCard, borderColor: C.amberBorder },
+  cardInactive: { backgroundColor: C.bgCard, borderColor: C.dangerBorder },
+  row: { flexDirection: "row", alignItems: "center", gap: 14 },
+  iconWrap: { width: 52, height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center" },
+  title: { fontFamily: "Inter_700Bold", fontSize: 16, color: C.text, marginBottom: 4 },
+  subtitle: { fontFamily: "Inter_400Regular", fontSize: 12, color: C.textSub, lineHeight: 18 },
+  liveDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: C.success },
+});
 
-  const lastSession = workout.sessions[0];
-  const totalSessions = workout.totalSessionsCompleted;
+// ════════════════════════════════════════════════════════════════════════════
+// STATS ROW
+// ════════════════════════════════════════════════════════════════════════════
+
+const StatsRow = memo(() => {
+  const { settings } = useSettings();
+  const stats = settings.stats;
+
+  const items = useMemo(() => [
+    { icon: "youtube", label: "Shorts", value: stats.shortsShieldedToday, total: stats.totalShortsShielded },
+    { icon: "filmstrip-off", label: "Reels", value: stats.reelsRejectedToday, total: stats.totalReelsRejected },
+    { icon: "skip-next", label: "Ads", value: stats.adsRemovedToday, total: stats.totalAdsRemoved },
+  ], [stats]);
 
   return (
-    <LinearGradient colors={["#07060F", "#0D0B1E", "#07060F"]} style={styles.gradient}>
-      <SafeAreaView style={styles.safe}>
+    <View style={sr.row}>
+      {items.map((item, i) => (
+        <View key={i} style={sr.card}>
+          <MaterialCommunityIcons name={item.icon as any} size={18} color={C.amber} style={{ marginBottom: 8 }} />
+          <Text style={sr.value}>{item.value}</Text>
+          <Text style={sr.label}>{item.label} today</Text>
+          <Text style={sr.total}>{item.total} total</Text>
+        </View>
+      ))}
+    </View>
+  );
+});
+
+const sr = StyleSheet.create({
+  row: { flexDirection: "row", gap: 10, marginBottom: 16 },
+  card: { flex: 1, backgroundColor: C.bgCard, borderWidth: 1, borderColor: C.border, borderRadius: R.card, padding: 14, alignItems: "center" },
+  value: { fontFamily: "Inter_700Bold", fontSize: 28, color: C.text, letterSpacing: -1 },
+  label: { fontFamily: "Inter_500Medium", fontSize: 11, color: C.textMuted, marginTop: 4 },
+  total: { fontFamily: "Inter_400Regular", fontSize: 10, color: C.textMuted, marginTop: 2 },
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// CORE PILLARS OVERVIEW
+// ════════════════════════════════════════════════════════════════════════════
+
+const PillarRow = memo(({ icon, label, status, statusColor, onPress }: {
+  icon: string; label: string; status: string; statusColor: string; onPress: () => void;
+}) => (
+  <TouchableOpacity style={pr.row} onPress={onPress} activeOpacity={0.85}>
+    <MaterialCommunityIcons name={icon as any} size={20} color={C.amber} />
+    <Text style={pr.label}>{label}</Text>
+    <Text style={[pr.status, { color: statusColor }]}>{status}</Text>
+    <MaterialCommunityIcons name="chevron-right" size={18} color={C.textMuted} />
+  </TouchableOpacity>
+));
+
+const CorePillars = memo(() => {
+  const { mindset } = useMindset();
+  const { workout } = useWorkout();
+  const { settings } = useSettings();
+
+  const screenTimePct = useMemo(() => {
+    if (!mindset.screenTime.enabled) return "Off";
+    return `${mindset.screenTime.dailyLimitMin}m limit`;
+  }, [mindset.screenTime]);
+
+  return (
+    <View style={pr.container}>
+      <Text style={pr.sectionLabel}>Core Pillars</Text>
+      <View style={pr.card}>
+        <PillarRow
+          icon="shield-crown"
+          label="Smart Shield"
+          status={settings.isServiceEnabled ? "Active" : "Disabled"}
+          statusColor={settings.isServiceEnabled ? C.success : C.danger}
+          onPress={() => router.push("/(tabs)/shield")}
+        />
+        <View style={pr.divider} />
+        <PillarRow
+          icon="brain"
+          label="Mindset & Focus"
+          status={screenTimePct}
+          statusColor={C.amber}
+          onPress={() => router.push("/(tabs)/mindset")}
+        />
+        <View style={pr.divider} />
+        <PillarRow
+          icon="arm-flex"
+          label="Fitness"
+          status={`${workout.totalSessionsCompleted} sessions`}
+          statusColor={C.amber}
+          onPress={() => router.push("/(tabs)/workout")}
+        />
+      </View>
+    </View>
+  );
+});
+
+const pr = StyleSheet.create({
+  container: { marginBottom: 16 },
+  sectionLabel: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 },
+  card: { backgroundColor: C.bgCard, borderWidth: 1, borderColor: C.border, borderRadius: R.card, overflow: "hidden" },
+  row: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 14, paddingHorizontal: 16 },
+  label: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: C.text, flex: 1 },
+  status: { fontFamily: "Inter_500Medium", fontSize: 12 },
+  divider: { height: 1, backgroundColor: C.border, marginHorizontal: 16 },
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// QUICK ACTIONS
+// ════════════════════════════════════════════════════════════════════════════
+
+const QuickActions = memo(() => {
+  const { triggerSuddenBlock } = useSettings();
+
+  const actions = useMemo(() => [
+    {
+      icon: "lightning-bolt", label: "Panic Block",
+      desc: "Block all apps for 5 minutes",
+      onPress: () => {
+          setPanicVisible(true);
+      },
+    },
+    {
+      icon: "cog", label: "Settings",
+      desc: "PIN, profiles, support",
+      onPress: () => router.push("/settings"),
+    },
+  ], []);
+
+  const [panicVisible, setPanicVisible] = useState(false);
+
+  return (
+    <View style={{ marginBottom: 16 }}>
+      <Text style={pr.sectionLabel}>Quick Actions</Text>
+      <View style={{ flexDirection: "row", gap: 10 }}>
+        {actions.map((a, i) => (
+          <TouchableOpacity key={i} style={qa.btn} onPress={a.onPress} activeOpacity={0.85}>
+            <MaterialCommunityIcons name={a.icon as any} size={22} color={C.amber} style={{ marginBottom: 8 }} />
+            <Text style={qa.label}>{a.label}</Text>
+            <Text style={qa.desc}>{a.desc}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <CustomAlert
+        visible={panicVisible}
+        title="Panic Block"
+        message="Are you sure you want to trigger a strict 5-minute hardware block on all social media?"
+        icon="lightning-bolt"
+        confirmLabel="Block Now"
+        cancelLabel="Cancel"
+        onConfirm={() => {
+          setPanicVisible(false);
+          triggerSuddenBlock(5);
+        }}
+        onCancel={() => setPanicVisible(false)}
+      />
+    </View>
+  );
+});
+
+const qa = StyleSheet.create({
+  btn: { flex: 1, backgroundColor: C.bgCard, borderWidth: 1, borderColor: C.border, borderRadius: R.card, padding: 16 },
+  label: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: C.text, marginBottom: 4 },
+  desc: { fontFamily: "Inter_400Regular", fontSize: 11, color: C.textMuted, lineHeight: 16 },
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// FEEDBACK REWARD PROMPT
+// ════════════════════════════════════════════════════════════════════════════
+
+const FeedbackPrompt = memo(() => {
+  const { checkRewardTrigger, clearRewardTrigger, addRewardPoints } = useSettings();
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    const poll = async () => {
+      const triggerTime = await checkRewardTrigger();
+      if (triggerTime > 0) {
+        const elapsed = Date.now() - triggerTime;
+        // If trigger was within the last 5 minutes, ask for feedback
+        if (elapsed < 5 * 60 * 1000) {
+           setVisible(true);
+        }
+        clearRewardTrigger();
+      }
+    };
+
+    const handleState = (state: AppStateStatus) => {
+      if (state === "active") poll();
+    };
+
+    const sub = AppState.addEventListener("change", handleState);
+    interval = setInterval(poll, 3000);
+    poll();
+
+    return () => {
+      sub.remove();
+      clearInterval(interval);
+    };
+  }, []);
+
+  if (!visible) return null;
+
+  return (
+    <View style={StyleSheet.absoluteFill}>
+      <View style={fb.overlay}>
+        <View style={fb.card}>
+          <MaterialCommunityIcons name="brain" size={40} color={C.amber} style={{ marginBottom: 16 }} />
+          <Text style={fb.title}>Neural Interception</Text>
+          <Text style={fb.desc}>I just diverted you from a short-form feed. How did I do?</Text>
+          
+          <TouchableOpacity 
+             style={fb.btnFlow} 
+             activeOpacity={0.8}
+             onPress={() => {
+               setVisible(false);
+               addRewardPoints(10);
+               Alert.alert("Elite Point Awarded", "+10 Points! Keep up the focus.");
+             }}
+          >
+             <MaterialCommunityIcons name="check-circle" size={20} color={C.bg} />
+             <Text style={fb.btnTextPrimary}>Perfect! Saved me.</Text>
+          </TouchableOpacity>
+
+           <TouchableOpacity 
+             style={fb.btnSecondary} 
+             activeOpacity={0.8}
+             onPress={() => {
+               setVisible(false);
+             }}
+          >
+             <Text style={fb.btnTextSec}>It missed it, I backed out manually.</Text>
+          </TouchableOpacity>
+
+           <TouchableOpacity 
+             style={fb.btnSecondary} 
+             activeOpacity={0.8}
+             onPress={() => {
+               setVisible(false);
+             }}
+          >
+             <Text style={fb.btnTextSec}>False positive (I wasn't scrolling).</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  );
+});
+
+const fb = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.8)", justifyContent: "center", alignItems: "center", padding: 24, zIndex: 9999 },
+  card: { backgroundColor: C.bgCard, width: "100%", borderRadius: R.card, padding: 24, alignItems: "center", borderWidth: 1, borderColor: C.border },
+  title: { fontFamily: "Inter_700Bold", fontSize: 20, color: C.text, marginBottom: 8 },
+  desc: { fontFamily: "Inter_400Regular", fontSize: 13, color: C.textSub, textAlign: "center", marginBottom: 24, lineHeight: 20 },
+  btnFlow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: C.amber, width: "100%", paddingVertical: 14, borderRadius: 100, marginBottom: 12 },
+  btnTextPrimary: { fontFamily: "Inter_700Bold", fontSize: 15, color: C.bg },
+  btnSecondary: { backgroundColor: C.bgElevated, width: "100%", paddingVertical: 14, borderRadius: 100, alignItems: "center", marginBottom: 10, borderWidth: 1, borderColor: C.border },
+  btnTextSec: { fontFamily: "Inter_500Medium", fontSize: 13, color: C.textMuted },
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// MAIN SCREEN
+// ════════════════════════════════════════════════════════════════════════════
+
+export default memo(function DashboardScreen() {
+  return (
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
+      <SafeAreaView style={{ flex: 1 }}>
         <ScrollView
-          contentContainerStyle={styles.scroll}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.amber} />}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16 }}
+          showsVerticalScrollIndicator={false}
         >
-          {/* Header */}
-          <View style={styles.header}>
-            <View>
-              <Text style={styles.greeting}>Fresh Mind Elite</Text>
-              <Text style={styles.headerSub}>Your focus, your rules.</Text>
-            </View>
-            <TouchableOpacity onPress={() => router.push("/settings")} style={styles.settingsBtn}>
-              <MaterialCommunityIcons name="cog-outline" size={22} color={C.textSub} />
-            </TouchableOpacity>
+          <View style={{ marginBottom: 20 }}>
+            <Text style={{ fontFamily: "Inter_700Bold", fontSize: 24, color: C.text, letterSpacing: -0.5 }}>
+              Fresh Mind Elite
+            </Text>
+            <Text style={{ fontFamily: "Inter_400Regular", fontSize: 13, color: C.textMuted, marginTop: 4 }}>
+              Your digital wellness command center.
+            </Text>
           </View>
 
-          {/* Shield Status Hero */}
-          <GlowCard color={serviceActive ? C.green : C.danger} style={styles.heroCard}>
-            <LinearGradient
-              colors={serviceActive ? [C.greenGlow, "transparent"] : [C.dangerGlow, "transparent"]}
-              style={StyleSheet.absoluteFill}
-            />
-            <View style={styles.heroRow}>
-              <View>
-                <Text style={styles.heroTitle}>
-                  {serviceActive ? "Shield Active" : "Shield Offline"}
-                </Text>
-                <Text style={[styles.heroSub, { color: serviceActive ? C.green : C.danger }]}>
-                  {serviceActive ? "Blocking shorts & ads" : "Enable accessibility to start"}
-                </Text>
-              </View>
-              <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-                <View style={[styles.shieldBadge, { backgroundColor: serviceActive ? C.green + "22" : C.danger + "22", borderColor: serviceActive ? C.green + "55" : C.danger + "55" }]}>
-                  <MaterialCommunityIcons
-                    name={serviceActive ? "shield-check" : "shield-off"}
-                    size={36}
-                    color={serviceActive ? C.green : C.danger}
-                  />
-                </View>
-              </Animated.View>
-            </View>
+          <ShieldHero />
+          <StatsRow />
+          <CorePillars />
+          <QuickActions />
 
-            {!serviceActive && (
-              <TouchableOpacity
-                onPress={() => AccessibilityModule.openAccessibilitySettings()}
-                style={styles.enableBtn}
-              >
-                <Text style={styles.enableBtnText}>Enable Now →</Text>
-              </TouchableOpacity>
-            )}
-          </GlowCard>
-
-          {/* Today's Stats */}
-          <Text style={styles.sectionTitle}>Today's Shield Report</Text>
-          <GlowCard color={C.amber}>
-            <View style={styles.statsRow}>
-              <StatBadge label="Shorts" value={s.shortsShieldedToday} color={C.amber} />
-              <View style={styles.statDivider} />
-              <StatBadge label="Reels" value={s.reelsRejectedToday} color={C.blue} />
-              <View style={styles.statDivider} />
-              <StatBadge label="Ads" value={s.adsRemovedToday} color={C.green} />
-              <View style={styles.statDivider} />
-              <StatBadge label="Total" value={totalToday} color={C.amber} />
-            </View>
-
-            <View style={styles.totalStrip}>
-              <MaterialCommunityIcons name="chart-bar" size={14} color={C.amberGlow.replace("0.15", "0.6")} />
-              <Text style={styles.totalStripText}>
-                Lifetime: {s.totalShortsShielded + s.totalReelsRejected + s.totalAdsRemoved} blocked
-              </Text>
-            </View>
-          </GlowCard>
-
-          {/* 3 Cores */}
-          <Text style={styles.sectionTitle}>Your Cores</Text>
-          <View style={styles.coreRow}>
-            <CoreCard
-              icon="shield-crown"
-              label="Smart Shield"
-              subtitle="Tap to configure blocking"
-              color={C.amber}
-              value={serviceActive ? "Active" : "Off"}
-              onPress={() => router.navigate("/(tabs)/shield")}
-            />
-            <CoreCard
-              icon="brain"
-              label="Mindset"
-              subtitle={totalTasks > 0 ? `${doneTasks}/${totalTasks} tasks done` : "Build your routine"}
-              color={C.blue}
-              value={mindset.streakDays > 0 ? `${mindset.streakDays}d streak` : "—"}
-              onPress={() => router.navigate("/(tabs)/mindset")}
-            />
-          </View>
-          <CoreCard
-            icon="arm-flex"
-            label="Workout"
-            subtitle={lastSession ? `Last: ${lastSession.programName}` : "Start your first workout"}
-            color={C.green}
-            value={`${totalSessions} sessions`}
-            onPress={() => router.navigate("/(tabs)/workout")}
-          />
-
-          {/* Quick Tips */}
-          <Text style={styles.sectionTitle}>Pro Tips</Text>
-          <GlowCard color={C.purple}>
-            <View style={styles.tipRow}>
-              <MaterialCommunityIcons name="lightbulb-outline" size={20} color={C.purple} />
-              <Text style={styles.tipText}>
-                Enable the accessibility service, then open YouTube. The shield will automatically skip Shorts and ads.
-              </Text>
-            </View>
-          </GlowCard>
-
-          <View style={{ height: 90 }} />
+          <View style={{ height: 100 }} />
         </ScrollView>
       </SafeAreaView>
-    </LinearGradient>
+      
+      <FeedbackPrompt />
+    </View>
   );
-}
-
-const styles = StyleSheet.create({
-  gradient: { flex: 1 },
-  safe: { flex: 1 },
-  scroll: { paddingHorizontal: 16, paddingTop: 8 },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20, marginTop: 8 },
-  greeting: { fontFamily: "Inter_700Bold", fontSize: 22, color: C.text, letterSpacing: -0.5 },
-  headerSub: { fontFamily: "Inter_400Regular", fontSize: 13, color: C.textMuted, marginTop: 2 },
-  settingsBtn: { padding: 8, borderRadius: 14, backgroundColor: C.bgElevated },
-
-  heroCard: { marginBottom: 20, padding: 20 },
-  heroRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  heroTitle: { fontFamily: "Inter_700Bold", fontSize: 20, color: C.text, marginBottom: 4 },
-  heroSub: { fontFamily: "Inter_500Medium", fontSize: 13 },
-  shieldBadge: { width: 72, height: 72, borderRadius: 36, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
-  enableBtn: { marginTop: 16, backgroundColor: C.danger + "22", borderWidth: 1, borderColor: C.danger + "44", borderRadius: 12, paddingVertical: 10, alignItems: "center" },
-  enableBtnText: { fontFamily: "Inter_600SemiBold", color: C.danger, fontSize: 14 },
-
-  sectionTitle: { fontFamily: "Inter_600SemiBold", fontSize: 13, color: C.textMuted, letterSpacing: 1, textTransform: "uppercase", marginBottom: 10, marginTop: 4 },
-
-  glowCard: { backgroundColor: C.bgCard, borderWidth: 1, borderRadius: CARD_RADIUS, padding: 16, marginBottom: 16, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 4, overflow: "hidden" },
-
-  statsRow: { flexDirection: "row", justifyContent: "space-around", alignItems: "center", paddingVertical: 8 },
-  statBadge: { alignItems: "center", flex: 1 },
-  statValue: { fontFamily: "Inter_700Bold", fontSize: 26, letterSpacing: -1 },
-  statLabel: { fontFamily: "Inter_500Medium", fontSize: 11, color: C.textMuted, marginTop: 2 },
-  statDivider: { width: 1, height: 36, backgroundColor: C.border },
-  totalStrip: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: C.border },
-  totalStripText: { fontFamily: "Inter_400Regular", fontSize: 12, color: C.textMuted },
-
-  coreRow: { flexDirection: "row", gap: 12, marginBottom: 12 },
-  coreCard: { flex: 1, backgroundColor: C.bgCard, borderWidth: 1, borderColor: C.border, borderRadius: CARD_RADIUS, padding: 16, overflow: "hidden", justifyContent: "space-between" },
-  coreIconWrap: { width: 44, height: 44, borderRadius: 14, borderWidth: 1, alignItems: "center", justifyContent: "center", marginBottom: 12 },
-  coreLabel: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: C.text, marginBottom: 4 },
-  coreValue: { fontFamily: "Inter_700Bold", fontSize: 18, color: C.text, marginBottom: 2 },
-  coreSub: { fontFamily: "Inter_400Regular", fontSize: 11, color: C.textMuted },
-  coreArrow: { position: "absolute", top: 12, right: 12, borderRadius: 8, padding: 4 },
-
-  tipRow: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
-  tipText: { fontFamily: "Inter_400Regular", fontSize: 13, color: C.textSub, flex: 1, lineHeight: 20 },
 });

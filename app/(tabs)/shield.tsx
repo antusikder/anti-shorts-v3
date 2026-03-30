@@ -1,368 +1,336 @@
-import React, { useEffect, useState } from "react";
+import React, { memo, useEffect, useState } from "react";
 import {
-  View, ScrollView, Text, Switch, TouchableOpacity, StyleSheet,
-  Alert, Animated,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  Switch, AppState, AppStateStatus, Dimensions
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 import { useSettings } from "@/context/SettingsContext";
 import { AccessibilityModule } from "@/modules/AccessibilityModule";
-import { C } from "@/constants/colors";
+import { C, R } from "@/constants/colors";
 
-const CARD_RADIUS = 20;
+// ════════════════════════════════════════════════════════════════════════════
+// SERVICE STATUS HERO
+// ════════════════════════════════════════════════════════════════════════════
 
-type FeedCategory = { id: string; label: string; emoji: string; selected: boolean };
+const ServiceHero = memo(() => {
+  const { setServiceEnabled } = useSettings();
+  const [active, setActive] = useState(false);
 
-const INITIAL_CATEGORIES: FeedCategory[] = [
-  { id: "study", label: "Study & Learning", emoji: "📚", selected: false },
-  { id: "tech", label: "Technology & Dev", emoji: "💻", selected: false },
-  { id: "science", label: "Science", emoji: "🔬", selected: false },
-  { id: "history", label: "History & Culture", emoji: "🏛️", selected: false },
-  { id: "informatics", label: "Informatics", emoji: "📊", selected: false },
-  { id: "fitness", label: "Fitness & Health", emoji: "💪", selected: false },
-  { id: "nature", label: "Nature & Wildlife", emoji: "🌿", selected: false },
-  { id: "philosophy", label: "Philosophy", emoji: "🧠", selected: false },
-  { id: "finance", label: "Finance & Investing", emoji: "💹", selected: false },
-  { id: "art", label: "Art & Design", emoji: "🎨", selected: false },
-];
+  useEffect(() => {
+    check();
+    const sub = AppState.addEventListener("change", (s: AppStateStatus) => {
+      if (s === "active") check();
+    });
+    return () => sub.remove();
+  }, []);
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  const check = async () => {
+    const enabled = await AccessibilityModule.isServiceEnabled();
+    setActive(enabled);
+    setServiceEnabled(enabled);
+  };
+
   return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      <View style={styles.card}>{children}</View>
-    </View>
-  );
-}
-
-function ToggleItem({
-  icon, iconColor, label, sub, value, onToggle,
-}: {
-  icon: string; iconColor: string; label: string; sub?: string;
-  value: boolean; onToggle: (v: boolean) => void;
-}) {
-  return (
-    <View style={styles.toggleRow}>
-      <View style={[styles.toggleIcon, { backgroundColor: iconColor + "20" }]}>
-        <MaterialCommunityIcons name={icon as any} size={18} color={iconColor} />
+    <TouchableOpacity
+      style={[svc.card, active ? svc.cardOk : svc.cardBad]}
+      onPress={() => {
+        if (!active) AccessibilityModule.openAccessibilitySettings();
+      }}
+      activeOpacity={active ? 1 : 0.8}
+    >
+      <View style={svc.row}>
+        <View style={[svc.icon, { backgroundColor: active ? C.amberBg : C.dangerBg }]}>
+          <MaterialCommunityIcons
+            name={active ? "shield-check" : "shield-alert"}
+            size={24}
+            color={active ? C.amber : C.danger}
+          />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={svc.title}>Neural Engine {active ? "Running" : "Offline"}</Text>
+          <Text style={svc.sub}>
+            {active ? "Multi-model scanner is enforcing limits." : "Tap to enable accessibility service."}
+          </Text>
+        </View>
+        {active ? (
+          <View style={svc.livePulse} />
+        ) : (
+          <MaterialCommunityIcons name="arrow-right" size={20} color={C.danger} />
+        )}
       </View>
-      <View style={styles.toggleText}>
-        <Text style={styles.toggleLabel}>{label}</Text>
-        {sub && <Text style={styles.toggleSub}>{sub}</Text>}
+    </TouchableOpacity>
+  );
+});
+
+const svc = StyleSheet.create({
+  card: { borderRadius: R.card, padding: 18, marginBottom: 20, borderWidth: 1, backgroundColor: C.bgCard },
+  cardOk: { borderColor: C.amberBorder },
+  cardBad: { borderColor: C.dangerBorder },
+  row: { flexDirection: "row", alignItems: "center", gap: 14 },
+  icon: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center" },
+  title: { fontFamily: "Inter_600SemiBold", fontSize: 15, color: C.text, marginBottom: 2 },
+  sub: { fontFamily: "Inter_400Regular", fontSize: 12, color: C.textSub },
+  livePulse: { width: 10, height: 10, borderRadius: 5, backgroundColor: C.success },
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// MASTER CONTROLS
+// ════════════════════════════════════════════════════════════════════════════
+
+const ToggleRow = memo(({ label, desc, value, onValueChange, icon, indent }: {
+  label: string; desc?: string; value: boolean; onValueChange: (v: boolean) => void;
+  icon?: string; indent?: boolean;
+}) => (
+  <View style={[tc.wrapper, indent && { paddingLeft: 42 }]}>
+    <View style={tc.row}>
+      {icon && <MaterialCommunityIcons name={icon as any} size={20} color={C.amber} style={{ width: 26 }} />}
+      <View style={{ flex: 1 }}>
+        <Text style={tc.label}>{label}</Text>
       </View>
       <Switch
         value={value}
-        onValueChange={onToggle}
-        thumbColor={value ? C.amber : "#555"}
-        trackColor={{ false: "#333", true: C.amber + "44" }}
+        onValueChange={(v) => { onValueChange(v); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+        trackColor={{ false: "rgba(255,255,255,0.08)", true: C.amberBg }}
+        thumbColor={value ? C.amber : C.textMuted}
       />
     </View>
-  );
-}
+    {desc && <Text style={[tc.desc, { paddingLeft: icon ? 36 : 0 }]}>{desc}</Text>}
+  </View>
+));
 
-function PlatformCard({
-  color, icon, label, enabled, onToggle, children,
-}: {
-  color: string; icon: string; label: string; enabled: boolean;
-  onToggle: (v: boolean) => void; children?: React.ReactNode;
-}) {
-  return (
-    <View style={[styles.platformCard, { borderColor: enabled ? color + "44" : C.border }]}>
-      <LinearGradient colors={enabled ? [color + "18", "transparent"] : ["transparent", "transparent"]} style={StyleSheet.absoluteFill} />
-      <View style={styles.platformHeader}>
-        <View style={[styles.platformIcon, { backgroundColor: color + "22" }]}>
-          <MaterialCommunityIcons name={icon as any} size={22} color={color} />
-        </View>
-        <Text style={[styles.platformLabel, { color: enabled ? C.text : C.textMuted }]}>{label}</Text>
-        <Switch
-          value={enabled}
-          onValueChange={onToggle}
-          thumbColor={enabled ? color : "#555"}
-          trackColor={{ false: "#333", true: color + "44" }}
-        />
-      </View>
-      {enabled && children && <View style={styles.platformOptions}>{children}</View>}
+const MultiModelConfig = memo(() => {
+  const { settings, updateMethodToggles, updateScanSpeed } = useSettings();
+
+  const SpeedSelector = () => (
+    <View style={tc.speedRow}>
+      {(["balanced", "aggressive", "battery"] as const).map(speed => (
+        <TouchableOpacity
+          key={speed}
+          style={[tc.speedBtn, settings.scanSpeed === speed && tc.speedBtnActive]}
+          onPress={() => {
+            updateScanSpeed(speed);
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }}
+          activeOpacity={0.8}
+        >
+          <Text style={[tc.speedText, settings.scanSpeed === speed && tc.speedTextActive]}>
+            {speed.charAt(0).toUpperCase() + speed.slice(1)}
+          </Text>
+        </TouchableOpacity>
+      ))}
     </View>
   );
-}
-
-export default function ShieldScreen() {
-  const { settings, updateSystemEnabled, updateYoutube, updateFacebook, updateInstagram, updateTiktok, updateSkipAds } = useSettings();
-  const [serviceActive, setServiceActive] = useState(false);
-  const [categories, setCategories] = useState<FeedCategory[]>(INITIAL_CATEGORIES);
-  const [pulseAnim] = useState(new Animated.Value(1));
-
-  useEffect(() => {
-    checkService();
-  }, []);
-
-  useEffect(() => {
-    if (serviceActive && settings.systemEnabled) {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, { toValue: 1.15, duration: 1500, useNativeDriver: true }),
-          Animated.timing(pulseAnim, { toValue: 1, duration: 1500, useNativeDriver: true }),
-        ])
-      ).start();
-    } else {
-      pulseAnim.setValue(1);
-    }
-  }, [serviceActive, settings.systemEnabled]);
-
-  const checkService = async () => {
-    const enabled = await AccessibilityModule.isServiceEnabled();
-    setServiceActive(enabled);
-  };
-
-  const handleEnableService = () => {
-    Alert.alert(
-      "Enable Accessibility Service",
-      "Find 'Fresh Mind Elite' in the list and enable it to activate the Smart Shield.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Open Settings", onPress: () => {
-            AccessibilityModule.openAccessibilitySettings();
-          }
-        },
-      ]
-    );
-  };
-
-  const toggleCategory = (id: string) => {
-    setCategories((cats) =>
-      cats.map((c) => (c.id === id ? { ...c, selected: !c.selected } : c))
-    );
-  };
-
-  const selectedCount = categories.filter((c) => c.selected).length;
 
   return (
-    <LinearGradient colors={["#07060F", "#0D0B1E", "#07060F"]} style={styles.gradient}>
-      <SafeAreaView style={styles.safe}>
-        <ScrollView contentContainerStyle={styles.scroll}>
+    <View style={tc.section}>
+      <Text style={tc.sectionTitle}>Multi-Model Interceptors</Text>
+      <View style={tc.card}>
+        <ToggleRow
+          icon="broom"
+          label="Method 1: Shelf Sweeper"
+          desc="Finds 'Shorts/Reels' containers and clicks 'Show less'."
+          value={settings.method1_sweeper}
+          onValueChange={(v) => updateMethodToggles("method1_sweeper", v)}
+        />
+        <View style={tc.divider} />
+        <ToggleRow
+          icon="target"
+          label="Method 2: The Sniper"
+          desc="Detects individual video nodes and clicks their specific menu."
+          value={settings.method2_sniper}
+          onValueChange={(v) => updateMethodToggles("method2_sniper", v)}
+        />
+        <View style={tc.divider} />
+        <ToggleRow
+          icon="vector-rectangle"
+          label="Method 3: Geometric Analyst"
+          desc="Detects vertical video frames natively via aspect ratio math."
+          value={settings.method3_geometric}
+          onValueChange={(v) => updateMethodToggles("method3_geometric", v)}
+        />
+        <View style={tc.divider} />
+        <ToggleRow
+          icon="keyboard-return"
+          label="Method 4: Back-Bouncer"
+          desc="Instantly bounces you out if you enter a Shorts/Reels tab/link."
+          value={settings.method4_bouncer}
+          onValueChange={(v) => updateMethodToggles("method4_bouncer", v)}
+        />
+      </View>
 
-          {/* Header */}
-          <View style={styles.header}>
-            <MaterialCommunityIcons name="shield-crown" size={22} color={C.amber} />
-            <Text style={styles.headerTitle}>Smart Shield</Text>
+      <Text style={[tc.sectionTitle, { marginTop: 8 }]}>Engine Speed</Text>
+      <View style={tc.card}>
+         <SpeedSelector />
+         <Text style={[tc.desc, { padding: 16, paddingTop: 0 }]}>
+           Aggressive = 80ms (Very Fast). Balanced = 150ms. Battery = 300ms. Keep on balanced unless experiencing lag.
+         </Text>
+      </View>
+    </View>
+  );
+});
+
+const PlatformToggles = memo(() => {
+  const { settings, updateYoutube, updateFacebook, updateInstagram, updateTiktok, updateMethodToggles, updateSystemEnabled, updateSkipAds } = useSettings();
+
+  return (
+    <View style={tc.section}>
+      <Text style={tc.sectionTitle}>Target Platforms</Text>
+      <View style={tc.card}>
+        <ToggleRow
+          icon="power" label="Master Shield" desc="Toggle entirely on/off."
+          value={settings.systemEnabled} onValueChange={updateSystemEnabled}
+        />
+        <View style={tc.divider} />
+        <ToggleRow
+          icon="youtube" label="YouTube" value={settings.youtube.enabled}
+          onValueChange={(v) => updateYoutube("enabled", v)}
+        />
+        <View style={tc.divider} />
+        <ToggleRow
+          icon="facebook" label="Facebook & Lite" value={settings.facebook.enabled}
+          onValueChange={(v) => updateFacebook("enabled", v)}
+        />
+        <View style={tc.divider} />
+        <ToggleRow
+          icon="instagram" label="Instagram" value={settings.instagram.enabled}
+          onValueChange={updateInstagram}
+        />
+        <View style={tc.divider} />
+        <ToggleRow
+          icon="music-note" label="TikTok" value={settings.tiktok.enabled}
+          onValueChange={updateTiktok}
+        />
+        <View style={tc.divider} />
+        <ToggleRow
+          icon="web" label="Browser Shield" desc="Active URL inspection for YT/FB/IG reels."
+          value={settings.browser_monitoring} onValueChange={(v) => updateMethodToggles("browser_monitoring", v)}
+        />
+        <View style={tc.divider} />
+        <ToggleRow
+          icon="fast-forward" label="Ad Skipper" desc="Auto-clicks 'Skip Ad' when visible."
+          value={settings.skipAds} onValueChange={updateSkipAds}
+        />
+      </View>
+    </View>
+  );
+});
+
+const tc = StyleSheet.create({
+  section: { marginBottom: 20 },
+  sectionTitle: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: C.textMuted, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 },
+  card: { backgroundColor: C.bgCard, borderWidth: 1, borderColor: C.border, borderRadius: R.card, overflow: "hidden" },
+  wrapper: { paddingVertical: 14, paddingHorizontal: 16 },
+  row: { flexDirection: "row", alignItems: "center", gap: 10 },
+  label: { fontFamily: "Inter_500Medium", fontSize: 14, color: C.text },
+  desc: { fontFamily: "Inter_400Regular", fontSize: 12, color: C.textSub, marginTop: 4, lineHeight: 18 },
+  divider: { height: 1, backgroundColor: C.border, marginHorizontal: 16 },
+  speedRow: { flexDirection: "row", gap: 8, padding: 16 },
+  speedBtn: { flex: 1, alignItems: "center", paddingVertical: 10, borderRadius: R.button, backgroundColor: C.bgElevated, borderWidth: 1, borderColor: C.border },
+  speedBtnActive: { backgroundColor: C.amberBg, borderColor: C.amberBorder },
+  speedText: { fontFamily: "Inter_500Medium", fontSize: 12, color: C.textSub },
+  speedTextActive: { color: C.amber },
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// ALGORITHM SHAPER
+// ════════════════════════════════════════════════════════════════════════════
+
+const SHAPER_CATEGORIES = [
+  { id: "gaming", label: "Gaming", icon: "gamepad-variant" },
+  { id: "gossip", label: "Gossip", icon: "account-multiple" },
+  { id: "clickbait", label: "Clickbait", icon: "cursor-default-click" },
+  { id: "pranks", label: "Pranks", icon: "emoticon-lol" },
+  { id: "political", label: "Political", icon: "vote" },
+  { id: "nsfw", label: "NSFW", icon: "eye-off" },
+  { id: "mukbang", label: "Mukbang", icon: "food" },
+  { id: "asmr", label: "ASMR", icon: "ear-hearing" },
+];
+
+const AlgorithmShaper = memo(() => {
+  const [activeCategories, setActiveCategories] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (activeCategories.length > 0) {
+      AccessibilityModule.updateSettings({
+        shaperCategories: activeCategories.join(","),
+      } as any);
+    } else {
+      AccessibilityModule.updateSettings({
+        shaperCategories: "",
+      } as any);
+    }
+  }, [activeCategories]);
+
+  const toggleCategory = (id: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setActiveCategories(prev =>
+      prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]
+    );
+  };
+
+  return (
+    <View style={tc.section}>
+      <Text style={tc.sectionTitle}>Algorithm Shaper</Text>
+      <View style={[tc.card, { padding: 16 }]}>
+        <Text style={[tc.desc, { marginTop: 0, marginBottom: 14 }]}>
+          Scanner will aggressively flag matching feed items as "Not interested" to retrain your algorithms.
+        </Text>
+        <View style={as.grid}>
+          {SHAPER_CATEGORIES.map(cat => {
+            const active = activeCategories.includes(cat.id);
+            return (
+              <TouchableOpacity
+                key={cat.id}
+                style={[as.chip, active && as.chipActive]}
+                onPress={() => toggleCategory(cat.id)}
+                activeOpacity={0.8}
+              >
+                <MaterialCommunityIcons name={cat.icon as any} size={16} color={active ? C.amber : C.textMuted} />
+                <Text style={[as.chipText, active && { color: C.amber }]}>{cat.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+    </View>
+  );
+});
+
+const as = StyleSheet.create({
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  chip: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: R.circle, backgroundColor: C.bgElevated, borderWidth: 1, borderColor: C.border },
+  chipActive: { backgroundColor: C.amberBg, borderColor: C.amberBorder },
+  chipText: { fontFamily: "Inter_500Medium", fontSize: 13, color: C.textMuted },
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// MAIN SCREEN
+// ════════════════════════════════════════════════════════════════════════════
+
+export default memo(function ShieldScreen() {
+  return (
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
+      <SafeAreaView style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16 }} showsVerticalScrollIndicator={false}>
+          <View style={{ marginBottom: 24 }}>
+            <Text style={{ fontFamily: "Inter_700Bold", fontSize: 28, color: C.text, letterSpacing: -0.5 }}>
+              Neural Shield
+            </Text>
+            <Text style={{ fontFamily: "Inter_400Regular", fontSize: 14, color: C.textSub, marginTop: 4 }}>
+              Configure the multi-model interception engine.
+            </Text>
           </View>
-          <Text style={styles.headerSub}>Block shorts, skip ads, reshape your algorithm</Text>
 
-          {/* Service Status */}
-          {!serviceActive ? (
-            <TouchableOpacity onPress={handleEnableService} style={styles.offlineBanner}>
-              <View style={styles.bannerLeft}>
-                <MaterialCommunityIcons name="shield-off-outline" size={22} color={C.danger} />
-                <View>
-                  <Text style={styles.bannerTitle}>Accessibility Not Active</Text>
-                  <Text style={styles.bannerSub}>Tap to enable in Settings</Text>
-                </View>
-              </View>
-              <MaterialCommunityIcons name="open-in-new" size={18} color={C.danger} />
-            </TouchableOpacity>
-          ) : (
-            <Animated.View style={[styles.activeBanner, { transform: [{ scale: pulseAnim }] }]}>
-              <LinearGradient colors={[C.greenGlow, "transparent"]} style={StyleSheet.absoluteFill} />
-              <MaterialCommunityIcons name="shield-check" size={22} color={C.green} />
-              <Text style={styles.activeBannerText}>Shield is Active</Text>
-            </Animated.View>
-          )}
+          <ServiceHero />
+          <MultiModelConfig />
+          <PlatformToggles />
+          <AlgorithmShaper />
 
-          {/* Master Kill Switch */}
-          <Section title="Master Control">
-            <ToggleItem
-              icon="power"
-              iconColor={settings.systemEnabled ? C.green : C.danger}
-              label="System Active"
-              sub="Turn off to pause all blocking"
-              value={settings.systemEnabled}
-              onToggle={updateSystemEnabled}
-            />
-            <View style={styles.divider} />
-            <ToggleItem
-              icon="advertisement-off"
-              iconColor={C.blue}
-              label="Skip Ads"
-              sub="Auto-dismiss video ads on YouTube"
-              value={settings.skipAds}
-              onToggle={updateSkipAds}
-            />
-          </Section>
-
-          {/* Per-Platform */}
-          <Text style={styles.sectionTitle}>Platform Controls</Text>
-
-          <PlatformCard
-            color={C.youtube}
-            icon="youtube"
-            label="YouTube"
-            enabled={settings.youtube.enabled}
-            onToggle={(v) => updateYoutube("enabled", v)}
-          >
-            <ToggleItem
-              icon="skip-next-circle-outline"
-              iconColor={C.youtube}
-              label="Remove Shorts"
-              sub="Back out of Shorts automatically"
-              value={settings.youtube.removeShorts}
-              onToggle={(v) => updateYoutube("removeShorts", v)}
-            />
-            <View style={styles.divider} />
-            <ToggleItem
-              icon="star-outline"
-              iconColor={C.youtube}
-              label="Subscribed Channels First"
-              sub="Prefer content from channels you follow"
-              value={settings.youtube.subscribedOnly}
-              onToggle={(v) => updateYoutube("subscribedOnly", v)}
-            />
-          </PlatformCard>
-
-          <PlatformCard
-            color={C.facebook}
-            icon="facebook"
-            label="Facebook"
-            enabled={settings.facebook.enabled}
-            onToggle={(v) => updateFacebook("enabled", v)}
-          >
-            <ToggleItem
-              icon="video-off-outline"
-              iconColor={C.facebook}
-              label="Block Reels"
-              sub="Exit Facebook Reels automatically"
-              value={settings.facebook.removeReels}
-              onToggle={(v) => updateFacebook("removeReels", v)}
-            />
-          </PlatformCard>
-
-          <PlatformCard
-            color={C.instagram}
-            icon="instagram"
-            label="Instagram"
-            enabled={settings.instagram.enabled}
-            onToggle={(v) => updateInstagram(v)}
-          >
-            <Text style={styles.platformNote}>
-              ⚡ Instagram Reels will be blocked by pressing Back automatically.
-            </Text>
-          </PlatformCard>
-
-          <PlatformCard
-            color="#EE1D52"
-            icon="music-note"
-            label="TikTok"
-            enabled={settings.tiktok.enabled}
-            onToggle={(v) => updateTiktok(v)}
-          >
-            <Text style={styles.platformNote}>
-              🚫 Enabling this will exit TikTok every time it's opened.
-            </Text>
-          </PlatformCard>
-
-          {/* Algorithm Shaper */}
-          <Section title="Algorithm Shaper">
-            <Text style={styles.shaperInfo}>
-              Select topics to prioritize in your feed. The shield will deprioritize gaming,
-              unboxing, and entertainment content while boosting your selections.
-            </Text>
-            <Text style={styles.shaperCount}>
-              {selectedCount > 0 ? `${selectedCount} category${selectedCount > 1 ? "s" : ""} selected` : "None selected — all content allowed"}
-            </Text>
-            <View style={styles.categoriesGrid}>
-              {categories.map((cat) => (
-                <TouchableOpacity
-                  key={cat.id}
-                  onPress={() => toggleCategory(cat.id)}
-                  style={[styles.categoryChip, cat.selected && styles.categoryChipActive]}
-                  activeOpacity={0.8}
-                >
-                  {cat.selected && <LinearGradient colors={[C.amberGlow, "transparent"]} style={StyleSheet.absoluteFill} />}
-                  <Text style={styles.categoryEmoji}>{cat.emoji}</Text>
-                  <Text style={[styles.categoryLabel, cat.selected && { color: C.amber }]}>
-                    {cat.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <Text style={styles.shaperDisclaimer}>
-              ℹ️ Algorithm reshaping guides the service to deprioritize brainrot content and surface category-aligned videos from your subscribed channels.
-            </Text>
-          </Section>
-
-          {/* Web Notice */}
-          <View style={styles.webNotice}>
-            <MaterialCommunityIcons name="web" size={18} color={C.textMuted} />
-            <Text style={styles.webNoticeText}>
-              Web browsers cannot be controlled by accessibility services. Website blocking is not supported.
-            </Text>
-          </View>
-
-          <View style={{ height: 90 }} />
+          <View style={{ height: 100 }} />
         </ScrollView>
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
-}
-
-const styles = StyleSheet.create({
-  gradient: { flex: 1 },
-  safe: { flex: 1 },
-  scroll: { paddingHorizontal: 16, paddingTop: 8 },
-  header: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 4, marginTop: 8 },
-  headerTitle: { fontFamily: "Inter_700Bold", fontSize: 22, color: C.text, letterSpacing: -0.5 },
-  headerSub: { fontFamily: "Inter_400Regular", fontSize: 13, color: C.textMuted, marginBottom: 20 },
-
-  offlineBanner: {
-    backgroundColor: C.dangerGlow,
-    borderWidth: 1, borderColor: C.danger + "44",
-    borderRadius: 16, padding: 16,
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    marginBottom: 20,
-  },
-  bannerLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
-  bannerTitle: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: C.danger },
-  bannerSub: { fontFamily: "Inter_400Regular", fontSize: 12, color: C.textMuted },
-  activeBanner: {
-    flexDirection: "row", alignItems: "center", gap: 10,
-    backgroundColor: C.greenGlow,
-    borderWidth: 1, borderColor: C.green + "44",
-    borderRadius: 16, padding: 14, marginBottom: 20, overflow: "hidden",
-  },
-  activeBannerText: { fontFamily: "Inter_600SemiBold", fontSize: 14, color: C.green },
-
-  section: { marginBottom: 20 },
-  sectionTitle: { fontFamily: "Inter_600SemiBold", fontSize: 13, color: C.textMuted, letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 },
-  card: { backgroundColor: C.bgCard, borderWidth: 1, borderColor: C.border, borderRadius: CARD_RADIUS, overflow: "hidden" },
-
-  toggleRow: { flexDirection: "row", alignItems: "center", padding: 14, gap: 12 },
-  toggleIcon: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  toggleText: { flex: 1 },
-  toggleLabel: { fontFamily: "Inter_500Medium", fontSize: 14, color: C.text },
-  toggleSub: { fontFamily: "Inter_400Regular", fontSize: 12, color: C.textMuted, marginTop: 2 },
-  divider: { height: 1, backgroundColor: C.border, marginHorizontal: 14 },
-
-  platformCard: { marginBottom: 12, backgroundColor: C.bgCard, borderWidth: 1, borderRadius: CARD_RADIUS, overflow: "hidden" },
-  platformHeader: { flexDirection: "row", alignItems: "center", padding: 14, gap: 12 },
-  platformIcon: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  platformLabel: { fontFamily: "Inter_600SemiBold", fontSize: 15, flex: 1 },
-  platformOptions: { paddingHorizontal: 0, paddingBottom: 8, borderTopWidth: 1, borderTopColor: C.border },
-  platformNote: { fontFamily: "Inter_400Regular", fontSize: 12, color: C.textMuted, padding: 14, lineHeight: 18 },
-
-  shaperInfo: { fontFamily: "Inter_400Regular", fontSize: 13, color: C.textSub, lineHeight: 20, marginBottom: 12, padding: 14, paddingBottom: 0 },
-  shaperCount: { fontFamily: "Inter_600SemiBold", fontSize: 12, color: C.amber, paddingHorizontal: 14, marginBottom: 12 },
-  categoriesGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingHorizontal: 14 },
-  categoryChip: {
-    flexDirection: "row", alignItems: "center", gap: 6,
-    backgroundColor: C.bgElevated, borderWidth: 1, borderColor: C.border,
-    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, overflow: "hidden",
-  },
-  categoryChipActive: { borderColor: C.amber + "55" },
-  categoryEmoji: { fontSize: 14 },
-  categoryLabel: { fontFamily: "Inter_500Medium", fontSize: 12, color: C.textSub },
-  shaperDisclaimer: { fontFamily: "Inter_400Regular", fontSize: 11, color: C.textMuted, padding: 14, paddingTop: 12, lineHeight: 17 },
-
-  webNotice: { flexDirection: "row", gap: 8, alignItems: "flex-start", backgroundColor: C.bgCard, borderRadius: 14, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: C.border },
-  webNoticeText: { fontFamily: "Inter_400Regular", fontSize: 12, color: C.textMuted, flex: 1, lineHeight: 18 },
 });

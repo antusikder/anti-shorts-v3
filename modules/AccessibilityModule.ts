@@ -14,6 +14,8 @@ interface AntiShortsNativeModule {
   openAccessibilitySettings: () => void;
   updateSettings: (settings: Record<string, unknown>) => void;
   getInstalledApps: () => Promise<InstalledApp[]>;
+  getRewardTrigger: () => Promise<number>;
+  clearRewardTrigger: () => void;
 }
 
 class AccessibilityModuleImpl {
@@ -63,6 +65,22 @@ class AccessibilityModuleImpl {
     } catch {
       return [];
     }
+  }
+
+  async getRewardTrigger(): Promise<number> {
+    if (!this.native?.getRewardTrigger) return 0;
+    try {
+      return await this.native.getRewardTrigger();
+    } catch {
+      return 0;
+    }
+  }
+
+  clearRewardTrigger(): void {
+    if (!this.native?.clearRewardTrigger) return;
+    try {
+      this.native.clearRewardTrigger();
+    } catch {}
   }
 }
 
